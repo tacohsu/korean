@@ -26,6 +26,7 @@ body{margin:0;background:var(--paper);color:var(--ink);
 .kr{font-family:"Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",system-ui,sans-serif}
 .wrap{max-width:600px;margin:0 auto;padding:18px 16px 0}
 h1{font-size:19px;font-weight:600;margin:0 0 2px;letter-spacing:.02em}
+h1 .zh{font-size:13px;font-weight:400;color:var(--ink2);margin-left:7px}
 h2{font-size:15px;font-weight:600;margin:26px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--rule)}
 .sub{font-size:13px;color:var(--ink2);margin:0 0 18px}
 button{font:inherit;color:inherit;cursor:pointer;border:none;background:none}
@@ -144,6 +145,13 @@ nav button.on b{opacity:1}
 .bubble.them{margin-right:20px;border-left:2px solid var(--seal)}
 .answerInput{width:100%;padding:13px;border:1px solid var(--rule);border-radius:var(--r);background:var(--card);
   color:var(--ink);font:inherit;margin-top:12px}
+.guide{background:var(--card);border:1px solid var(--ruleS);border-radius:14px;padding:18px;margin-bottom:18px}
+.guide h3{font-size:19px;margin:0 0 5px}.guide .lead{font-size:14px;color:var(--ink2);margin-bottom:15px}
+.guideStep{display:flex;gap:11px;padding:9px 0;border-top:1px solid var(--paper2)}
+.guideStep b{width:25px;height:25px;border-radius:50%;background:var(--indigo);color:#fff;display:flex;
+  align-items:center;justify-content:center;font-size:12px;flex-shrink:0}
+.guideStep div{font-size:14px}.guideStep span{display:block;font-size:12px;color:var(--ink2);margin-top:1px}
+.learnNote{background:var(--paper2);border-radius:var(--r);padding:11px 13px;font-size:13px;margin:10px 0;color:var(--ink2)}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 <div id="app"><div class="empty">불러오는 중…</div></div>
@@ -806,7 +814,7 @@ const LOCAL=(()=>{try{localStorage.setItem("__p","1");localStorage.removeItem("_
 const KEY="kr:v1";
 let backend="",lastErr="",savedAt="",loadedFrom="";
 let S={cards:{},day:{d:"",newN:0,revN:0},streak:0,last:"",total:0,newPerDay:12,rate:0.75,
-  off:{listen:1},roma:true,trip:"",exportedAt:"",mtime:0};
+  off:{listen:1},roma:true,trip:"",exportedAt:"",mtime:0,onboarded:false};
 const today=()=>new Date().toLocaleDateString("sv");
 const dnum=s=>Math.floor(new Date(s+"T00:00:00").getTime()/864e5);
 async function rawGet(k){
@@ -918,7 +926,8 @@ function grade(id,g){
 }
 function buildQueue(){
   const due=DECKS.filter(c=>isDue(c.id));
-  const fresh=DECKS.filter(c=>!seen(c.id)&&!S.off[c.deck]).slice(0,Math.max(0,S.newPerDay-S.day.newN));
+  const fresh=DECKS.filter(c=>!seen(c.id)&&!S.off[c.deck]).sort((a,b)=>learnRank(a)-learnRank(b))
+    .slice(0,Math.max(0,S.newPerDay-S.day.newN));
   const q=due.concat(fresh);
   for(let i=q.length-1;i>0;i--){const j=(Math.random()*(i+1))|0;[q[i],q[j]]=[q[j],q[i]];}
   return q;
@@ -956,9 +965,13 @@ const tag=m=>`<span class="pill ${m===2?"on":(m===1?"mid":"")}">${m===2?"已掌�
 const app=document.getElementById("app"),navEl=document.getElementById("nav");
 const TABS=[["today","今","今日"],["hangul","한","韓文字"],["pron","音","發音"],
   ["word","단","單字"],["gram","문","文法"],["talk","화","會話"]];
-let tab="today",wMode="word",tMode="travel",session=null,shown=false,pick=null,curOpts=null,undoSnap=null,played=0,taught=false,setOpen=false,ioMode="";
+let tab="today",wMode="word",tMode="travel",session=null,shown=false,pick=null,curOpts=null,undoSnap=null,played=0,taught=false,setOpen=false,helpOpen=false,ioMode="";
 const MODS=[["jamo","字母"],["syllable","拼讀"],["contrast","音辨"],["batchim","收尾音"],["word","單字"],["number","數字量詞"],["gram","文法"],["travel","旅遊會話"],["dialogue","雙向對話"],["response","回話聽力"],["reading","短文讀解"],["drama","戲劇台詞"],["busan","釜山"],["listen","聽力"]];
 const DLABEL={jamo:"字母",syllable:"音節拼讀",contrast:"相似音辨識",batchim:"收尾音",word:"單字",number:"數字量詞",gram:"文法",travel:"旅遊會話",dialogue:"雙向對話",response:"回話聽力",reading:"短文讀解",drama:"戲劇台詞",busan:"釜山",listen:"聽力"};
+const PROMPT={jamo:"這個字母怎麼念？",syllable:"請逐字拼讀，再連起來念",contrast:"請依序念出並比較聲音",batchim:"這個收尾音怎麼念？",
+  word:"這個韓文是什麼意思？",number:"請用韓文說出這個數字或數量",gram:"先讀中文規則，再選正確答案",
+  travel:"這句中文用韓文怎麼說？",dialogue:"遇到這個情境，你會怎麼說？",response:"只聽聲音，對方說了什麼？",
+  reading:"閱讀韓文短文後回答問題",drama:"這句中文用韓文怎麼說？",busan:"這個釜山詞語怎麼念？",listen:"只聽聲音，猜出意思"};
 const COURSE=[
   {n:"韓文字入門",d:"40個字母、音節組合與基本拼讀",k:["jamo","syllable"]},
   {n:"發音基礎",d:"相似音、七種收尾音與常見音變",k:["contrast","batchim"]},
@@ -967,6 +980,11 @@ const COURSE=[
   {n:"整合理解",d:"無文字聽力、短文閱讀與韓劇台詞",k:["listen","reading","drama"]}
 ];
 function courseCards(keys){let out=[];keys.forEach(k=>{out=out.concat(BY[k]||[]);});return out;}
+function learnRank(c){
+  if(c.deck==="jamo")return /^v2/.test(c.id)?2:(/^c2/.test(c.id)?3:(/^v\d/.test(c.id)?0:1));
+  const order=["syllable","contrast","batchim","word","number","gram","travel","dialogue","response","busan","reading","drama","listen"];
+  const n=order.indexOf(c.deck);return n<0?99:n+4;
+}
 
 function drawNav(){
   navEl.innerHTML=TABS.map(t=>`<button data-t="${t[0]}" class="${tab===t[0]&&!session?"on":""}"><b class="kr">${t[1]}</b>${t[2]}</button>`).join("");
@@ -983,6 +1001,9 @@ function bind(){
   app.querySelectorAll("[data-start]").forEach(e=>e.onclick=()=>startSession(e.dataset.start));
   app.querySelectorAll("[data-type]").forEach(e=>e.onclick=()=>startTyping(e.dataset.type));
   app.querySelectorAll("[data-course]").forEach(e=>e.onclick=()=>startCourse(+e.dataset.course));
+  app.querySelectorAll("[data-help]").forEach(e=>e.onclick=()=>{helpOpen=!helpOpen;render();});
+  app.querySelectorAll("[data-guide-close]").forEach(e=>e.onclick=()=>{S.onboarded=true;helpOpen=false;save();render();});
+  app.querySelectorAll("[data-begin]").forEach(e=>e.onclick=()=>{S.onboarded=true;helpOpen=false;save();startBeginner();});
   app.querySelectorAll("[data-np]").forEach(e=>e.onchange=()=>{S.newPerDay=+e.value;save();render();});
   app.querySelectorAll("[data-rate]").forEach(e=>e.onchange=()=>{S.rate=+e.value;save();say("안녕하세요");render();});
   app.querySelectorAll("[data-roma]").forEach(e=>e.onclick=()=>{S.roma=!S.roma;save();render();});
@@ -1019,7 +1040,18 @@ function vToday(){
   const q=buildQueue(),due=DECKS.filter(c=>isDue(c.id)).length,done=S.day.newN+S.day.revN;
   const cells=Array.from({length:32},(_,i)=>`<i class="${i<done?(i<S.day.newN?"n":"f"):""}"></i>`).join("");
   const syncBad=(!!lastErr)||(syncOn()&&/失敗/.test(syncMsg));
-  return `<div class="wrap"><h1>오늘의 학습</h1>
+  return `<div class="wrap"><h1>오늘의 학습 <span class="zh">今日學習</span></h1>
+  <p class="sub">從這裡開始每天的課程。紅色格是今天的新內容，灰色格是複習。</p>
+  ${(!S.onboarded||helpOpen)?`<div class="guide">
+    <h3>完全零基礎，從這裡開始</h3>
+    <div class="lead">你不需要先會韓文。系統會先教字母，再帶你拼讀、學句子和旅行會話。</div>
+    <div class="guideStep"><b>1</b><div>先完成「韓文字入門」<span>從基本母音與子音開始，不要先跳到文法或會話。</span></div></div>
+    <div class="guideStep"><b>2</b><div>看到卡片先想一下<span>第一次不會很正常，可以猜答案或按「顯示答案」。</span></div></div>
+    <div class="guideStep"><b>3</b><div>按「聽發音」並跟著念<span>羅馬拼音只是暫時提示，重點是逐漸直接讀韓文字。</span></div></div>
+    <div class="guideStep"><b>4</b><div>依真實情況評分<span>不會＝完全想不起來；模糊＝看提示才會；會了＝能自己回答。</span></div></div>
+    <button class="cta" data-begin>開始第一課：基本字母</button>
+    ${S.onboarded?`<button class="cta2" data-guide-close>關閉說明</button>`:""}
+  </div>`:""}
   <p class="sub">${S.streak>0?`連續 ${S.streak} 天 · `:""}已學過 ${Object.keys(S.cards).length} / ${DECKS.length} 張卡</p>
   <div class="genko">${cells}</div>
   <div class="stat"><div><b>${q.length}</b><span>待學</span></div>
@@ -1027,6 +1059,7 @@ function vToday(){
     <div><b>${done}</b><span>今日完成</span></div></div>
   ${q.length?`<button class="cta" data-start="all">開始今天的 ${q.length} 張</button>`
    :`<div class="cta done">今天做完了</div>`}
+  <button class="cta2" data-help>？查看中文使用說明</button>
   <button class="cta2" data-start="jamo">只練字母</button>
   <button class="cta2" data-start="drama">只練台詞</button>
   <button class="cta2" data-start="listen">聽力練習（只聽聲音）</button>
@@ -1117,8 +1150,9 @@ function jamoTable(list,cols,pre){
 }
 function vHangul(){
   const d=BY.jamo.filter(c=>mastery(c.id)===2).length;
-  return `<div class="wrap"><h1>한글</h1>
-  <p class="sub">只有 40 個字母，全部拼出來。理解規則之後你就能讀任何韓文字。已掌握 ${d}/${BY.jamo.length}</p>
+  return `<div class="wrap"><h1>한글 <span class="zh">韓文字母</span></h1>
+  <p class="sub">這一頁教你韓文字怎麼組成。先學基本母音10個，再學基本子音14個；複合母音與雙子音放到後面。</p>
+  <div class="learnNote"><b>零基礎重點：</b>先記住字形和聲音，不需要背「기역、니은」等韓文名稱。點每一格可以聽發音。已掌握 ${d}/${BY.jamo.length}</div>
   <button class="cta" data-start="jamo">練習字母</button>
   <h2>字是怎麼組起來的</h2>
   <div class="gcard">
@@ -1137,10 +1171,10 @@ function vHangul(){
     </div>
     <div class="n" style="margin-top:12px">母音是直的（ㅏㅓㅣ）就放右邊，是橫的（ㅗㅜㅡ）就放下面。收尾音一律在最下面。</div>
   </div>
-  <h2>기본 모음 10</h2>${jamoTable(VOWEL,5)}
-  <h2>기본 자음 14</h2>${jamoTable(CONS,5)}
-  <h2>복합 모음 11</h2>${jamoTable(VOWEL2,4)}
-  <h2>쌍자음 5</h2>${jamoTable(CONS2,5)}
+  <h2>기본 모음 10｜基本母音10個</h2>${jamoTable(VOWEL,5)}
+  <h2>기본 자음 14｜基本子音14個</h2>${jamoTable(CONS,5)}
+  <h2>복합 모음 11｜複合母音11個</h2>${jamoTable(VOWEL2,4)}
+  <h2>쌍자음 5｜雙子音5個</h2>${jamoTable(CONS2,5)}
   <p class="sub" style="margin-top:8px">쌍자음 不是「唸兩次」，是喉嚨繃緊、不送氣。ㄱ 輕、ㅋ 送氣、ㄲ 繃緊，三個一組對比著記最快。</p>
   <h2>받침（收尾音）${BY.batchim.filter(c=>mastery(c.id)===2).length}/7</h2>
   <p class="sub">27 種寫法，但只有 7 種聲音。收尾音<b>不會爆出來</b>——ㄱ 收尾是舌根抵住就停，不是唸「ㄍ」。</p>
@@ -1163,8 +1197,8 @@ function vHangul(){
 
 /* --- 發音 --- */
 function vPron(){
-  return `<div class="wrap"><h1>발음 규칙</h1>
-  <p class="sub">韓文的拼寫和實際發音經常不同，這是聽劇對不上字幕的主因。每條規則下面的例子都可以點來聽</p>
+  return `<div class="wrap"><h1>발음 규칙 <span class="zh">發音規則</span></h1>
+  <p class="sub">學完基本字母再看這頁。韓文連在一起時，寫法和聽到的聲音可能不同；每條規則都有中文解釋，例子可以點來聽。</p>
   ${PRON.map(r=>`<div class="gcard">
     <div class="p"><span class="kr">${r.n}</span>　<span style="font-size:14px;font-weight:400;color:var(--ink2)">${r.t}</span></div>
     <div class="n">${r.g}</div>
@@ -1227,7 +1261,7 @@ function vNumber(){
     </div>`).join("")}</div>`;
 }
 function vWord(){
-  return `<div class="wrap" style="padding-bottom:0"><h1>단어</h1>
+  return `<div class="wrap" style="padding-bottom:0"><h1>단어 <span class="zh">單字</span></h1>
   ${subbar("wm",[["word","單字"],["number","數字量詞"]],wMode)}</div>`
   + (wMode==="number"?vNumber():vWordList());
 }
@@ -1243,8 +1277,8 @@ function vWordList(){
 /* --- 文法 --- */
 function vGram(){
   const d=GRAMK.filter((_,i)=>mastery("g"+i)===2).length;
-  return `<div class="wrap"><h1>문법</h1>
-  <p class="sub">${GRAMK.length} 個基本句型。助詞和語尾是韓文的骨架，動詞變化都靠它們。已掌握 ${d}</p>
+  return `<div class="wrap"><h1>문법 <span class="zh">文法與句型</span></h1>
+  <p class="sub">建議學完字母與拼讀後再開始。每張卡會先用中文說明規則，再讓你選出正確助詞或句尾。共${GRAMK.length}個句型，已掌握 ${d}</p>
   <button class="cta" data-start="gram">練習文法題</button>
   ${GRAMK.map((g,i)=>`<div class="gcard">
     <div class="p kr">${g.p}${tag(mastery("g"+i))}</div>
@@ -1256,7 +1290,7 @@ function vGram(){
 
 /* --- 台詞 --- */
 function vTalk(){
-  return `<div class="wrap" style="padding-bottom:0"><h1>회화</h1>
+  return `<div class="wrap" style="padding-bottom:0"><h1>회화 <span class="zh">生活與旅行會話</span></h1>
   ${subbar("tm",[["travel","旅遊"],["dialogue","回話"],["reading","讀解"],["drama","戲劇"],["busan","釜山"]],tMode)}</div>`
   + ({travel:vTravel,dialogue:vDialogue,reading:vReading,drama:vDrama,busan:vBusan}[tMode])();
 }
@@ -1347,11 +1381,18 @@ const TIP={jamo:"先唸出這個字母的音",batchim:"先想這個收尾音怎�
   gram:"想出正確的助詞或語尾",travel:"出聲把整句韓文講出來",dialogue:"先自己說，再預測對方回話",
   response:"只聽回答，判斷對方在說什麼",reading:"先讀全文，再回答問題",
   drama:"出聲把整句韓文講出來",busan:"先唸唸看",listen:"先聽，再想是什麼意思"};
+function startBeginner(){
+  const ids=new Set(VOWEL.map((_,i)=>"v"+i).concat(CONS.map((_,i)=>"c"+i)));
+  let q=DECKS.filter(c=>ids.has(c.id)&&(isDue(c.id)||!seen(c.id)));
+  if(!q.length)q=DECKS.filter(c=>ids.has(c.id));
+  q=q.slice(0,12);if(!q.length)return;
+  session={q,i:0,n:q.length};shown=false;pick=null;curOpts=null;undoSnap=null;played=0;taught=false;render();
+}
 function startCourse(i){
   const u=COURSE[i];if(!u)return;
-  let q=courseCards(u.k).filter(c=>isDue(c.id)||!seen(c.id));
-  if(!q.length)q=courseCards(u.k);
-  q=shuf(q).slice(0,25);if(!q.length)return;
+  let q=courseCards(u.k).filter(c=>isDue(c.id)||!seen(c.id)).sort((a,b)=>learnRank(a)-learnRank(b));
+  if(!q.length)q=courseCards(u.k).sort((a,b)=>learnRank(a)-learnRank(b));
+  q=shuf(q.slice(0,25));if(!q.length)return;
   session={q,i:0,n:q.length};shown=false;pick=null;curOpts=null;undoSnap=null;played=0;taught=false;render();
 }
 function startTyping(kind){
@@ -1445,6 +1486,7 @@ function drawStudy(){
   <div class="qbar"><div>${DLABEL[c.deck]}${teachNow?" · 先學":(isNew?" · 新卡":"　複習")}</div>
     <div>${session.i+1} / ${session.q.length}</div></div>
   <div class="face" style="${teachNow?"align-items:stretch;justify-content:flex-start;text-align:left":""}">
+    ${!teachNow?`<div class="tag">${PROMPT[c.deck]||"先想答案，再翻卡確認"}</div>`:""}
     ${teachNow?`<div class="mid kr" style="font-size:22px;margin-bottom:8px">${esc(c.gram.p)}</div>
       <div style="font-size:14px;color:var(--ink2);line-height:1.7">${esc(c.gram.n)}</div>
       ${c.gram.ex.map(e=>`<div style="border-left:2px solid var(--ruleS);padding-left:11px;margin-top:12px">
@@ -1457,8 +1499,8 @@ function drawStudy(){
   </div>
   <div class="tip">${tip}</div>
   ${teachNow?`<button class="reveal" id="taught">懂了，來測驗</button>`
-   :(shown?`<div class="grades"><button class="g0" data-g="0">不會</button>
-     <button class="g1" data-g="1">模糊</button><button class="g2" data-g="2">會了</button></div>`
+   :(shown?`<div class="grades"><button class="g0" data-g="0">不會<br><small>想不起來</small></button>
+     <button class="g1" data-g="1">模糊<br><small>看提示才會</small></button><button class="g2" data-g="2">會了<br><small>自己答得出</small></button></div>`
    :(session.typed?`<input id="typeans" class="answerInput kr" lang="ko" autocomplete="off" autocapitalize="off" placeholder="請輸入韓文答案">
        <button class="reveal" id="typecheck">檢查答案</button>`
    :(isNew?`<div class="opts">${curOpts.map(o=>`<button data-opt="${esc(o)}" class="kr">${esc(o)}</button>`).join("")}</div>`
