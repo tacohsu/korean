@@ -153,6 +153,11 @@ nav button.on b{opacity:1}
   align-items:center;justify-content:center;font-size:12px;flex-shrink:0}
 .guideStep div{font-size:14px}.guideStep span{display:block;font-size:12px;color:var(--ink2);margin-top:1px}
 .learnNote{background:var(--paper2);border-radius:var(--r);padding:11px 13px;font-size:13px;margin:10px 0;color:var(--ink2)}
+#toast{position:fixed;left:50%;bottom:calc(92px + env(safe-area-inset-bottom));transform:translateX(-50%);width:max-content;max-width:88%;
+  background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:var(--r);font-size:13px;line-height:1.5;
+  opacity:0;pointer-events:none;transition:opacity .2s;z-index:20;text-align:center}
+#toast.show{opacity:1}
+.gcap{display:flex;justify-content:space-between;font-size:12px;color:var(--ink2);margin-top:6px}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 <div id="app"><div class="empty">불러오는 중…</div></div>
@@ -875,7 +880,7 @@ const LOCAL=(()=>{try{localStorage.setItem("__p","1");localStorage.removeItem("_
   return{get:k=>localStorage.getItem(k),set:(k,v)=>localStorage.setItem(k,v)};}catch(e){return null;}})();
 const KEY="kr:v1";
 let backend="",lastErr="",savedAt="",loadedFrom="";
-let S={cards:{},day:{d:"",newN:0,revN:0},streak:0,last:"",total:0,newPerDay:16,rate:0.75,
+let S={cards:{},day:{d:"",newN:0,revN:0,lrnN:0},streak:0,last:"",total:0,newPerDay:16,revPerDay:100,pauseNew:true,rate:0.75,
   off:{listen:1},roma:true,trip:"",exportedAt:"",mtime:0,onboarded:false};
 const today=()=>new Date().toLocaleDateString("sv");
 const dnum=s=>Math.floor(new Date(s+"T00:00:00").getTime()/864e5);
@@ -899,11 +904,18 @@ async function load(){
   if(!S.off)S.off={listen:1};
   if(!S.mig16){if(S.newPerDay===12)S.newPerDay=16;S.mig16=1;}
   if(typeof S.roma!=="boolean")S.roma=true;
+  if(typeof S.revPerDay!=="number")S.revPerDay=100;
+  if(typeof S.pauseNew!=="boolean")S.pauseNew=true;
+  rollDay();
+}
+/* 換日：歸零今日計數（app 開著跨過午夜也會觸發） */
+function rollDay(){
   const t=today();
   if(S.day.d!==t){
     if(S.last){const g=dnum(t)-dnum(S.last);S.streak=g===1?S.streak+1:(g===0?S.streak:0);}
-    S.day={d:t,newN:0,revN:0};
+    S.day={d:t,newN:0,revN:0,lrnN:0};
   }
+  if(typeof S.day.lrnN!=="number")S.day.lrnN=0;
 }
 let saveT;
 async function flush(){
@@ -987,13 +999,44 @@ function grade(id,g){
   c.due=dnum(today())+Math.max(0,c.ivl);c.t=Date.now();
   S.cards[id]=c;S.total++;S.last=today();S.mtime=Date.now();save();return g===0;
 }
-function buildQueue(){
-  const due=DECKS.filter(c=>isDue(c.id));
-  const fresh=DECKS.filter(c=>!seen(c.id)&&!S.off[c.deck]).sort((a,b)=>learnRank(a)-learnRank(b))
-    .slice(0,Math.max(0,S.newPerDay-S.day.newN));
-  const q=due.concat(fresh);
-  for(let i=q.length-1;i>0;i--){const j=(Math.random()*(i+1))|0;[q[i],q[j]]=[q[j],q[i]];}
-  return q;
+/* ---- 每日額度 ----
+   新卡：每天 newPerDay 張，所有練習入口共用。
+   複習：每天 revPerDay 張（0＝不限），依到期先後處理，超過的順延到明天。
+   重來卡（答「不會」後當天要再練的）不受複習上限限制，才不會卡住。
+   複習堆積超過上限時，當天暫停新卡，避免越積越多。 */
+function dueSplit(pool){
+  const t=dnum(today()),learn=[],rev=[];
+  pool.forEach(c=>{const s=S.cards[c.id];if(s&&t>=s.due)(s.ivl>0?rev:learn).push(c);});
+  rev.sort((a,b)=>S.cards[a.id].due-S.cards[b.id].due);
+  return {learn,rev};
+}
+function limits(){
+  const cap=S.revPerDay>0?S.revPerDay:Infinity;
+  const revLeft=Math.max(0,cap-S.day.revN);
+  const dueRev=dueSplit(DECKS).rev.length;
+  const backlog=Math.max(0,dueRev-revLeft);
+  const paused=S.pauseNew&&backlog>0;
+  const newLeft=paused?0:Math.max(0,S.newPerDay-S.day.newN);
+  return {revLeft,backlog,paused,newLeft};
+}
+function planCards(pool,freshOk){
+  const L=limits(),d=dueSplit(pool);
+  const fresh=pool.filter(c=>!seen(c.id)&&(!freshOk||freshOk(c)))
+    .sort((a,b)=>learnRank(a)-learnRank(b)).slice(0,L.newLeft);
+  return d.learn.concat(d.rev.slice(0,L.revLeft),fresh);
+}
+function buildQueue(){return shuf(planCards(DECKS,c=>!S.off[c.deck]));}
+/* 今天沒有排程內的卡時，改成只練學過的卡，不改變排程 */
+function practicePool(pool){return pool.filter(c=>seen(c.id));}
+function emptyMsg(){
+  const L=limits();
+  if(L.paused)return `到期複習有 ${L.backlog} 張超過今日上限，今天先暫停新卡`;
+  return `今天的新卡額度（${S.newPerDay} 張）已用完，明天再開始這個單元`;
+}
+function toast(msg){
+  let t=document.getElementById("toast");
+  if(!t){t=document.createElement("div");t.id="toast";t.setAttribute("role","status");document.body.appendChild(t);}
+  t.textContent=msg;t.className="show";clearTimeout(toast.h);toast.h=setTimeout(()=>{t.className="";},3400);
 }
 
 /* ============ 語音 ============ */
@@ -1054,6 +1097,7 @@ function drawNav(){
   navEl.querySelectorAll("button").forEach(b=>b.onclick=()=>{session=null;tab=b.dataset.t;render();});
 }
 function render(){
+  rollDay();
   if(session)return drawStudy();
   app.innerHTML=({today:vToday,hangul:vHangul,pron:vPron,word:vWord,gram:vGram,talk:vTalk}[tab])();
   bind();drawNav();window.scrollTo(0,0);
@@ -1068,6 +1112,8 @@ function bind(){
   app.querySelectorAll("[data-guide-close]").forEach(e=>e.onclick=()=>{S.onboarded=true;helpOpen=false;save();render();});
   app.querySelectorAll("[data-begin]").forEach(e=>e.onclick=()=>{S.onboarded=true;helpOpen=false;save();startBeginner();});
   app.querySelectorAll("[data-np]").forEach(e=>e.onchange=()=>{S.newPerDay=+e.value;save();render();});
+  app.querySelectorAll("[data-rp]").forEach(e=>e.onchange=()=>{S.revPerDay=+e.value;save();render();});
+  app.querySelectorAll("[data-pause]").forEach(e=>e.onclick=()=>{S.pauseNew=!S.pauseNew;save();render();});
   app.querySelectorAll("[data-rate]").forEach(e=>e.onchange=()=>{S.rate=+e.value;save();say("안녕하세요");render();});
   app.querySelectorAll("[data-roma]").forEach(e=>e.onclick=()=>{S.roma=!S.roma;save();render();});
   app.querySelectorAll("[data-off]").forEach(e=>e.onclick=()=>{const k=e.dataset.off;
@@ -1100,11 +1146,18 @@ function bind(){
 
 /* --- 今日 --- */
 function vToday(){
-  const q=buildQueue(),due=DECKS.filter(c=>isDue(c.id)).length,done=S.day.newN+S.day.revN;
-  const cells=Array.from({length:32},(_,i)=>`<i class="${i<done?(i<S.day.newN?"n":"f"):""}"></i>`).join("");
+  const q=buildQueue(),L=limits();
+  const nN=S.day.newN,done=nN+S.day.revN+S.day.lrnN,total=done+q.length;
+  /* 方格數＝今天的總量；超過 64 張時每格代表多張，避免方格太多 */
+  const unit=total>64?Math.ceil(total/64):1,cellN=Math.ceil(total/unit);
+  let fillAll=done>=total?cellN:Math.min(cellN-1,Math.round(done/unit));
+  if(done>0&&fillAll===0)fillAll=1;
+  let fillNew=Math.min(fillAll,Math.round(nN/unit));
+  if(nN>0&&fillNew===0)fillNew=1;
+  const cells=Array.from({length:cellN},(_,i)=>`<i class="${i<fillNew?"n":(i<fillAll?"f":"")}"></i>`).join("");
   const syncBad=(!!lastErr)||(syncOn()&&/失敗/.test(syncMsg));
   return `<div class="wrap"><h1>오늘의 학습 <span class="zh">今日學習</span></h1>
-  <p class="sub">從這裡開始每天的課程。紅色格是今天的新內容，灰色格是複習。</p>
+  <p class="sub">每一格是今天要做的一張卡，做完就填滿。紅色是新卡，灰色是複習。</p>
   ${(!S.onboarded||helpOpen)?`<div class="guide">
     <h3>完全零基礎，從這裡開始</h3>
     <div class="lead">你不需要先會韓文。系統會先教字母，再帶你拼讀、學句子和旅行會話。</div>
@@ -1116,10 +1169,12 @@ function vToday(){
     ${S.onboarded?`<button class="cta2" data-guide-close>關閉說明</button>`:""}
   </div>`:""}
   <p class="sub">${S.streak>0?`連續 ${S.streak} 天 · `:""}已學過 ${Object.keys(S.cards).length} / ${DECKS.length} 張卡</p>
-  <div class="genko">${cells}</div>
-  <div class="stat"><div><b>${q.length}</b><span>待學</span></div>
-    <div><b>${due}</b><span>到期複習</span></div>
-    <div><b>${done}</b><span>今日完成</span></div></div>
+  ${total?`<div class="genko">${cells}</div>
+  <div class="gcap"><span>今天 ${done} / ${total} 張</span><span>${unit>1?`每格 ${unit} 張`:""}</span></div>`:""}
+  <div class="stat"><div><b>${q.length}</b><span>今日剩餘</span></div>
+    <div><b>${done}</b><span>今日完成</span></div>
+    <div><b>${nN}<small style="font-size:16px;color:var(--ink3)">/${S.newPerDay}</small></b><span>新卡額度</span></div></div>
+  ${L.paused?`<div class="notice" style="border-left-color:var(--warn)">到期複習有 ${L.backlog} 張超過今日上限，今天先暫停新卡，多出來的依到期先後順延到明天。</div>`:""}
   ${q.length?`<button class="cta" data-start="all">開始今天的 ${q.length} 張</button>`
    :`<div class="cta done">今天做完了</div>`}
   <button class="cta2" data-help>？查看中文使用說明</button>
@@ -1132,7 +1187,7 @@ function vToday(){
     return `<button class="stage" data-course="${i}" style="text-align:left;width:100%"><div class="top">
       <span class="num">${i+1}</span><span class="st">${u.n}</span><span class="pill ${pc===100?"on":""}">${done}/${a.length}</span></div>
       <div class="sd">${u.d}</div><div class="mini"><i style="width:${pc}%"></i></div></button>`;}).join("")}</div>
-  <div class="notice">建議依序完成。每階段會優先安排尚未學過及到期的內容，每輪最多25張。</div>
+  <div class="notice">建議依序完成。每輪最多 25 張，先安排到期複習再加新卡；新卡和複習跟首頁共用每日上限。</div>
   ${(()=>{
     if(!S.trip)return "";
     const d=Math.ceil((new Date(S.trip)-new Date(today()))/864e5);
@@ -1158,9 +1213,17 @@ function vToday(){
     <div class="d">${S.roma?"熟了之後關掉，逼自己直接讀韓文":"想不起來時可以再打開"}</div></div>
     <span class="pill ${S.roma?"nx":""}">${S.roma?"關閉":"開啟"}</span></button>
   <div class="row"><div class="l"><div class="t">每天引入 ${S.newPerDay} 張新卡</div>
-    <div class="d">複習量不設上限</div></div>
+    <div class="d">所有練習入口共用這個額度</div></div>
     <select data-np style="padding:6px;border-radius:8px;background:var(--paper);color:var(--ink);border:1px solid var(--rule)">
     ${[6,8,10,12,16,20].map(n=>`<option ${n===S.newPerDay?"selected":""}>${n}</option>`).join("")}</select></div>
+  <div class="row"><div class="l"><div class="t">每天最多複習 ${S.revPerDay>0?S.revPerDay+" 張":"不限"}</div>
+    <div class="d">超過的依到期先後順延到明天；答錯要重來的卡不受限</div></div>
+    <select data-rp style="padding:6px;border-radius:8px;background:var(--paper);color:var(--ink);border:1px solid var(--rule)">
+    ${[[0,"不限"],[60,"60"],[100,"100"],[150,"150"],[200,"200"]].map(r=>
+      `<option value="${r[0]}" ${r[0]===S.revPerDay?"selected":""}>${r[1]}</option>`).join("")}</select></div>
+  <button class="row" data-pause><div class="l"><div class="t">複習堆積時暫停新卡：${S.pauseNew?"開啟中":"已關閉"}</div>
+    <div class="d">到期複習超過每日上限時，當天不再加新卡</div></div>
+    <span class="pill ${S.pauseNew?"nx":""}">${S.pauseNew?"關閉":"開啟"}</span></button>
   <div class="row"><div class="l"><div class="t">朗讀速度</div><div class="d">卡片上還有「更慢」</div></div>
     <select data-rate style="padding:6px;border-radius:8px;background:var(--paper);color:var(--ink);border:1px solid var(--rule)">
     ${[[0.5,"很慢"],[0.65,"慢"],[0.75,"偏慢"],[0.9,"正常"],[1,"原速"]].map(r=>
@@ -1453,33 +1516,26 @@ const TIP={jamo:"先唸出這個字母的音",batchim:"先想這個收尾音怎�
   gram:"想出正確的助詞或語尾",travel:"出聲把整句韓文講出來",dialogue:"先自己說，再預測對方回話",
   response:"只聽回答，判斷對方在說什麼",reading:"先讀全文，再回答問題",
   drama:"出聲把整句韓文講出來",busan:"先唸唸看",sign:"先唸出來，再想意思",listen:"先聽，再想是什麼意思"};
+/* 所有入口都經過 planCards，共用每日額度。排不出卡時改成額外練習（只練學過的、不動排程） */
+function openSession(pool,max,opt){
+  let q=planCards(pool).slice(0,max),practice=false;
+  if(!q.length){
+    q=practicePool(pool).sort((a,b)=>learnRank(a)-learnRank(b)).slice(0,max);practice=true;
+    if(!q.length){toast(emptyMsg());return;}
+    toast(emptyMsg()+"。以下是學過的卡，額外練習不影響排程");
+  }
+  session=Object.assign({q:shuf(q),i:0,n:q.length,practice},opt||{});
+  shown=false;pick=null;curOpts=null;undoSnap=null;played=0;taught=false;render();
+}
 function startBeginner(){
   const ids=new Set(VOWEL.map((_,i)=>"v"+i).concat(CONS.map((_,i)=>"c"+i)));
-  let q=DECKS.filter(c=>ids.has(c.id)&&(isDue(c.id)||!seen(c.id)));
-  if(!q.length)q=DECKS.filter(c=>ids.has(c.id));
-  q=q.slice(0,12);if(!q.length)return;
-  session={q,i:0,n:q.length};shown=false;pick=null;curOpts=null;undoSnap=null;played=0;taught=false;render();
+  openSession(DECKS.filter(c=>ids.has(c.id)),12);
 }
-function startCourse(i){
-  const u=COURSE[i];if(!u)return;
-  let q=courseCards(u.k).filter(c=>isDue(c.id)||!seen(c.id)).sort((a,b)=>learnRank(a)-learnRank(b));
-  if(!q.length)q=courseCards(u.k).sort((a,b)=>learnRank(a)-learnRank(b));
-  q=shuf(q.slice(0,25));if(!q.length)return;
-  session={q,i:0,n:q.length};shown=false;pick=null;curOpts=null;undoSnap=null;played=0;taught=false;render();
-}
-function startTyping(kind){
-  let q=DECKS.filter(c=>c.deck===kind&&(isDue(c.id)||!seen(c.id)));
-  if(!q.length)q=DECKS.filter(c=>c.deck===kind);
-  q=shuf(q).slice(0,20);if(!q.length)return;
-  session={q,i:0,n:q.length,typed:true};shown=false;pick=null;curOpts=null;undoSnap=null;played=0;taught=false;render();
-}
+function startCourse(i){const u=COURSE[i];if(u)openSession(courseCards(u.k),25);}
+function startTyping(kind){openSession(BY[kind]||[],20,{typed:true});}
 function startSession(kind){
-  let q;
-  if(kind==="all")q=buildQueue();
-  else{q=DECKS.filter(c=>c.deck===kind&&(isDue(c.id)||!seen(c.id)));
-    if(!q.length)q=DECKS.filter(c=>c.deck===kind);
-    q=shuf(q).slice(0,25);}
-  if(!q||!q.length)return;
+  if(kind!=="all")return openSession(BY[kind]||[],25);
+  const q=buildQueue();if(!q.length){toast("今天的排程都做完了");return;}
   session={q,i:0,n:q.length};shown=false;pick=null;curOpts=null;undoSnap=null;played=0;taught=false;render();
 }
 function answerBlock(c,isNew,pick){
@@ -1542,7 +1598,7 @@ function drawStudy(){
   navEl.innerHTML="";
   if(session.i>=session.q.length){
     app.innerHTML=`<div class="study"><div class="face"><div class="mid">끝!</div>
-    <div class="hint">完成 ${session.n} 張 · 今日累計 ${S.day.newN+S.day.revN} 張</div></div>
+    <div class="hint">完成 ${session.n} 張 · 今日累計 ${S.day.newN+S.day.revN+S.day.lrnN} 張${session.practice?"<br>額外練習，沒有改變複習排程":""}</div></div>
     <button class="cta" id="bk">回到今日</button></div>`;
     document.getElementById("bk").onclick=()=>{session=null;syncNow();render();};return;
   }
@@ -1555,7 +1611,7 @@ function drawStudy(){
     :(shown?"想不出來就按「不會」。評分誠實，排程才會準"
     :(isNew?"第一次見面，先猜猜看。選錯不扣分":(TIP[c.deck]||"先想出答案")+"，再看答案"));
   app.innerHTML=`<div class="study">
-  <div class="qbar"><div>${DLABEL[c.deck]}${teachNow?" · 先學":(isNew?" · 新卡":"　複習")}</div>
+  <div class="qbar"><div>${DLABEL[c.deck]}${session.practice?" · 額外練習":(teachNow?" · 先學":(isNew?" · 新卡":" · 複習"))}</div>
     <div>${session.i+1} / ${session.q.length}</div></div>
   <div class="face" style="${teachNow?"align-items:stretch;justify-content:flex-start;text-align:left":""}">
     ${!teachNow?`<div class="tag">${PROMPT[c.deck]||"先想答案，再翻卡確認"}</div>`:""}
@@ -1592,19 +1648,28 @@ function drawStudy(){
   app.querySelectorAll("[data-opt]").forEach(b=>b.onclick=()=>{
     pick=b.dataset.opt;shown=true;drawStudy();if(c.kr)say(c.kr);});
   app.querySelectorAll("[data-g]").forEach(b=>b.onclick=()=>{
-    const wasNew=!seen(c.id);
+    const g=+b.dataset.g;
+    if(session.practice){   /* 額外練習：不寫入排程也不計數 */
+      undoSnap={id:c.id,practice:1,i:session.i,pick,opts:curOpts,again:g===0};
+      if(g===0)session.q.push(c);
+      session.i++;shown=false;pick=null;curOpts=null;played=0;taught=false;drawStudy();return;
+    }
+    rollDay();
     const prev=S.cards[c.id]?JSON.parse(JSON.stringify(S.cards[c.id])):null;
-    const snap={id:c.id,prev,wasNew,i:session.i,total:S.total,last:S.last,pick,opts:curOpts};
-    const again=grade(c.id,+b.dataset.g);
-    if(wasNew)S.day.newN++;else S.day.revN++;
+    const wasNew=!prev,kind=wasNew?"newN":(prev.ivl>0?"revN":"lrnN");
+    const snap={id:c.id,prev,wasNew,kind,i:session.i,total:S.total,last:S.last,pick,opts:curOpts};
+    const again=grade(c.id,g);
+    S.day[kind]++;
     snap.again=again;if(again)session.q.push(c);
     undoSnap=snap;
     session.i++;shown=false;pick=null;curOpts=null;played=0;taught=false;drawStudy();});
   const ud=document.getElementById("undo");
   if(ud)ud.onclick=()=>{const u=undoSnap;if(!u)return;
-    if(u.prev)S.cards[u.id]=u.prev;else delete S.cards[u.id];
-    if(u.wasNew)S.day.newN=Math.max(0,S.day.newN-1);else S.day.revN=Math.max(0,S.day.revN-1);
-    S.total=u.total;S.last=u.last;
+    if(!u.practice){
+      if(u.prev)S.cards[u.id]=u.prev;else delete S.cards[u.id];
+      S.day[u.kind]=Math.max(0,S.day[u.kind]-1);
+      S.total=u.total;S.last=u.last;
+    }
     if(u.again&&session.q[session.q.length-1]&&session.q[session.q.length-1].id===u.id)session.q.pop();
     session.i=u.i;shown=true;pick=u.pick;curOpts=u.opts;played=1;taught=true;
     undoSnap=null;save();drawStudy();};
