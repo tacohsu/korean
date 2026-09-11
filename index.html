@@ -58,6 +58,12 @@ button:focus-visible{outline:2px solid var(--indigo);outline-offset:2px}
 .ans{border-top:1px dashed var(--rule);margin-top:18px;padding-top:16px;width:100%}
 .romaji{font-size:22px;color:var(--indigo);letter-spacing:.06em;font-weight:600}
 .hint{font-size:13px;color:var(--ink2);margin-top:8px}
+.info{text-align:left;font-size:14px;line-height:1.75;color:var(--ink);margin-top:14px;background:var(--paper2);border-radius:var(--r);padding:12px 14px}
+.info>div+div{margin-top:9px}
+.info b{display:block;font-size:11.5px;color:var(--seal);letter-spacing:.08em;font-weight:600}
+.info .icat{font-size:12px;color:var(--ink3)}
+.info .ex{margin:2px 6px 0 0;padding:3px 11px;font-size:16px}
+.info .iname{font-size:12px;color:var(--ink3)}
 .spk{margin-top:14px;padding:7px 16px;border:1px solid var(--rule);border-radius:99px;
   font-size:13px;color:var(--ink2);background:var(--paper)}
 .tip{font-size:12.5px;color:var(--ink2);text-align:center;margin-top:12px;line-height:1.5}
@@ -78,6 +84,8 @@ button:focus-visible{outline:2px solid var(--indigo);outline-offset:2px}
 .kt{display:grid;gap:4px}
 .kt div{background:var(--card);border:1px solid var(--rule);border-radius:6px;padding:7px 2px;text-align:center;line-height:1.25}
 .kt div.mix{border-color:var(--seal);border-width:1.5px}
+.kt div{cursor:pointer}
+.kt div.on{border-color:var(--seal);border-width:1.5px;background:var(--paper2)}
 .kt b{font-size:21px;font-weight:400;display:block}
 .kt s{font-size:11px;color:var(--ink3);text-decoration:none;display:block}
 .kt em{font-size:10px;color:var(--indigo);font-style:normal;display:block;letter-spacing:.04em}
@@ -353,40 +361,61 @@ function roman(sentence){
 
 
 /* ============ 한글 자모 ============ */
-/* [글자, 이름, 로마자, 설명] */
+/* [字母, 母音＝寫成字／子音＝字母名稱, 羅馬拼音, 怎麼唸, 怎麼記, 例字, 例字意思] */
 const VOWEL = [
-["ㅏ","아","a","嘴巴張開的「阿」"],["ㅑ","야","ya","ㅏ 加一畫＝加 y"],
-["ㅓ","어","eo","介於「喔」和「呃」，嘴不要圓"],["ㅕ","여","yeo","ㅓ 加 y"],
-["ㅗ","오","o","嘴唇圓的「歐」"],["ㅛ","요","yo","ㅗ 加 y"],
-["ㅜ","우","u","嘴唇噘出的「烏」"],["ㅠ","유","yu","ㅜ 加 y"],
-["ㅡ","으","eu","嘴角向兩側拉平，像忍住笑"],["ㅣ","이","i","「衣」"]];
+["ㅏ","아","a","嘴巴自然張大，唸注音「ㄚ」。","一條直線，右邊一短橫。短橫朝外，想成嘴巴張開。","아이","小孩"],
+["ㅑ","야","ya","唸「一ㄚ」，也就是 ya，前面快速帶一個「一」。","跟 ㅏ 一樣，但右邊有兩短橫。多一短橫＝前面多一個 y 音：ㅏ a → ㅑ ya。ㅓ→ㅕ、ㅗ→ㅛ、ㅜ→ㅠ 也是同樣規律，所以這四個不用另外背。","야구","棒球"],
+["ㅓ","어","eo","嘴巴張開，但嘴唇不要圓，發介於「ㄛ」和「ㄜ」之間的音。台灣人最常唸成嘴唇圓圓的「ㄛ」，那其實是 ㅗ。羅馬拼音雖然寫 eo，但只是一個音，不是 e 加 o。","短橫在直線左邊，和 ㅏ 左右相反。可以對著鏡子唸，嘴唇沒有圓起來就對了。","어머니","媽媽"],
+["ㅕ","여","yeo","前面快速帶一個「一」，再接 ㅓ 的音，嘴唇一樣不要圓。","ㅓ 多一短橫＝前面加 y 音：ㅓ eo → ㅕ yeo。","여기","這裡"],
+["ㅗ","오","o","嘴唇嘟成小圓形，唸「ㄛ」。","橫線上面有一短豎，短豎朝上。和 ㅓ 最容易搞混：ㅗ 嘴唇要圓，ㅓ 嘴唇不圓。","오이","小黃瓜"],
+["ㅛ","요","yo","唸「一ㄛ」，也就是 yo，嘴唇要圓。","ㅗ 多一短豎＝前面加 y 音：ㅗ o → ㅛ yo。敬語句尾的「요」就是這個字。","요리","料理"],
+["ㅜ","우","u","嘴唇噘成圓形往前推，唸「ㄨ」。","橫線下面有一短豎，短豎朝下。和 ㅗ 上下相反。","우유","牛奶"],
+["ㅠ","유","yu","唸「一ㄨ」，像英文 you。","ㅜ 多一短豎＝前面加 y 音：ㅜ u → ㅠ yu。","유자차","柚子茶"],
+["ㅡ","으","eu","嘴唇不要圓，嘴角往兩邊拉平，牙齒幾乎合起來，發一個扁扁的「ㄜ」。像不太情願時說的「呃」。","只有一條橫線，想成嘴巴被拉成一直線。外來語的子音結尾常補這個音，例如 bus 寫成 버스。","버스","公車"],
+["ㅣ","이","i","唸注音「一」。","只有一條直線，像一個人站直。","이름","名字"]];
 const VOWEL2 = [
-["ㅐ","애","ae","比 ㅔ 開一點，現代韓語幾乎同音"],["ㅒ","얘","yae","ㅐ 加 y"],
-["ㅔ","에","e","「ㄟ」"],["ㅖ","예","ye","ㅔ 加 y"],
-["ㅘ","와","wa","ㅗ＋ㅏ"],["ㅙ","왜","wae","ㅗ＋ㅐ"],["ㅚ","외","oe","實際上唸 we"],
-["ㅝ","워","wo","ㅜ＋ㅓ"],["ㅞ","웨","we","ㅜ＋ㅔ"],["ㅟ","위","wi","ㅜ＋ㅣ"],
-["ㅢ","의","ui","ㅡ＋ㅣ，助詞時唸 e"]];
+["ㅐ","애","ae","嘴巴稍微張開，唸「ㄝ」。現代韓語裡 ㅐ 和 ㅔ 聽起來幾乎一樣，聽不出差別很正常。","由 ㅏ 和 ㅣ 合在一起。兩個音一樣，只有拼字時要分清楚。","개","狗"],
+["ㅒ","얘","yae","唸「一ㄝ」，也就是 ye。","ㅐ 多一短橫＝前面加 y 音。這個字母很少見，最常出現在 얘기（話、聊天）。","얘기","話、聊天"],
+["ㅔ","에","e","唸「ㄝ」，和 ㅐ 幾乎同音。","由 ㅓ 和 ㅣ 合在一起。短橫朝左（ㅔ），和 ㅐ 的短橫朝右相反。","네","是、好"],
+["ㅖ","예","ye","唸「一ㄝ」，也就是 ye。前面有 ㅇ、ㄹ 以外的子音時，常直接唸成 ㅔ，例如 시계（時鐘）唸 시게。","ㅔ 多一短橫＝前面加 y 音。","예약","預約"],
+["ㅘ","와","wa","唸「ㄨㄚ」，也就是 wa。","ㅗ＋ㅏ 快速連在一起唸：o＋a＝wa。拆開看兩個部分就猜得出聲音。","사과","蘋果"],
+["ㅙ","왜","wae","唸「ㄨㄝ」，也就是 we。","ㅗ＋ㅐ：o＋ae＝we。ㅙ、ㅚ、ㅞ 三個在現代韓語幾乎同音，都唸 we。","왜","為什麼"],
+["ㅚ","외","oe","雖然羅馬拼音寫 oe，實際上唸「ㄨㄝ」（we），不是 o 和 e 分開唸。","字形是 ㅗ＋ㅣ，但聲音跟字形對不上，直接記「看到 ㅚ 就唸 we」。","회사","公司"],
+["ㅝ","워","wo","唸「ㄨㄛ」，也就是 wo，嘴唇從圓形打開。","ㅜ＋ㅓ：u＋eo＝wo。韓幣的單位「원」就是這個字母。","원","韓元"],
+["ㅞ","웨","we","唸「ㄨㄝ」，也就是 we。","ㅜ＋ㅔ：u＋e＝we。很少見，主要出現在外來語。","웨이팅","候位、排隊"],
+["ㅟ","위","wi","唸「ㄨㄧ」，像英文 we。","ㅜ＋ㅣ：u＋i＝wi。","위","上面"],
+["ㅢ","의","ui","先唸 ㅡ 再快速滑到 ㅣ（eu→i）。位置不同會變：字的開頭唸 ui（의사）；不在開頭或前面有子音時常唸 i（회의→회이、흰→힌）；當「的」用時常唸 e（나의→나에）。","ㅡ＋ㅣ。唸法會變的母音只有這一個，先記「字首唸 ui」就夠用。","의사","醫生"]];
 const CONS = [
-["ㄱ","기역","g/k","字頭較輕，像注音ㄍ和ㄎ之間"],["ㄴ","니은","n","「ㄋ」"],
-["ㄷ","디귿","d/t","「ㄉ」"],["ㄹ","리을","r/l","字頭像彈舌的 r，收尾像 l"],
-["ㅁ","미음","m","「ㄇ」"],["ㅂ","비읍","b/p","「ㄅ」"],
-["ㅅ","시옷","s","「ㄙ」，接 ㅣ 時像「ㄒ」"],["ㅇ","이응","–/ng","放字首不發音，放收尾唸 ng"],
-["ㅈ","지읒","j","「ㄗ」"],["ㅊ","치읓","ch","ㅈ 送氣"],
-["ㅋ","키읔","k","ㄱ 送氣"],["ㅌ","티읕","t","ㄷ 送氣"],
-["ㅍ","피읖","p","ㅂ 送氣"],["ㅎ","히읗","h","「ㄏ」"]];
+["ㄱ","기역","g/k","聽起來介於「ㄍ」和「ㄎ」之間，氣比 ㅋ 少很多。夾在兩個母音中間時會變柔，接近 g，所以羅馬拼音寫 g/k。放在字的最下面當收尾音時唸 k，而且不爆出來。","形狀像數字 7。ㄱ、ㅋ、ㄲ 是一組：輕、噴氣、繃緊。","가방","包包"],
+["ㄴ","니은","n","唸注音「ㄋ」。放在收尾時唸「ㄣ」的尾音。","形狀像英文字母 L。","나무","樹"],
+["ㄷ","디귿","d/t","聽起來介於「ㄉ」和「ㄊ」之間，氣很少。夾在兩個母音中間會變柔，接近 d。放在收尾時唸 t，不爆出來。","ㄴ 上面加一橫蓋子。ㄷ、ㅌ、ㄸ 是一組。","다리","腿、橋"],
+["ㄹ","리을","r/l","放在字的開頭或兩個母音中間時，舌尖在上排牙齒後面輕輕彈一下，介於「ㄌ」和 r 之間。放在收尾時，舌尖頂住上排牙齒後面，唸 l，不要捲舌。","彎彎曲曲，像「己」字。開頭唸 r、收尾唸 l，是羅馬拼音寫 r/l 的原因。","라면","泡麵"],
+["ㅁ","미음","m","唸注音「ㄇ」。放在收尾時雙唇閉上就停，不要多唸出「ㄇㄨ」。","方方的，像嘴巴「口」。唸 ㅁ 要閉嘴，剛好對得上。","마트","超市"],
+["ㅂ","비읍","b/p","聽起來介於「ㄅ」和「ㄆ」之間，氣很少。夾在兩個母音中間會變柔，接近 b。放在收尾時雙唇閉上就停，唸 p 不爆出來。","像一個水桶。ㅂ、ㅍ、ㅃ 是一組。","바다","海"],
+["ㅅ","시옷","s","唸注音「ㄙ」。後面接 ㅣ 或帶 y 的母音時，會變成「ㄒ」，例如 시 聽起來像「嘻」。放在收尾時唸 t。","形狀像「人」字。","시장","市場"],
+["ㅇ","이응","不發音/ng","有兩種用法。放在字的開頭（左邊或上面）完全不發音，只是佔位子，因為韓文每個字都要有子音開頭，例如 아 就是 a。放在字的最下面當收尾音時唸 ng，像「ㄥ」的尾音。","一個圓圈。在上面＝不出聲，在下面＝ng。例字 영화 的第一個 ㅇ 不發音，最下面的 ㅇ 唸 ng。","영화","電影"],
+["ㅈ","지읒","j","像注音「ㄐ」，也接近「ㄗ」，氣很少。夾在兩個母音中間會變柔。放在收尾時唸 t。","ㅅ 上面加一橫。ㅈ、ㅊ、ㅉ 是一組。","지도","地圖"],
+["ㅊ","치읓","ch","像注音「ㄑ」，也接近「ㄘ」，要噴氣。噴氣的意思是：手放在嘴巴前面，唸的時候感覺得到一口氣。","ㅈ 上面再加一小撇＝多一口氣。","친구","朋友"],
+["ㅋ","키읔","k","唸注音「ㄎ」，要噴氣。","ㄱ 中間多一橫＝多一口氣。","커피","咖啡"],
+["ㅌ","티읕","t","唸注音「ㄊ」，要噴氣。","ㄷ 中間多一橫＝多一口氣。","토마토","番茄"],
+["ㅍ","피읖","p","唸注音「ㄆ」，要噴氣。","上下兩橫、中間兩豎，像圓周率符號 π 加上底線。","포도","葡萄"],
+["ㅎ","히읗","h","唸注音「ㄏ」，但比國語輕，像呵一口氣。夾在母音中間時常變得很弱，幾乎聽不到。","像 ㅇ 戴了一頂帽子。","하나","一（個）"]];
 const CONS2 = [
-["ㄲ","쌍기역","kk","喉嚨繃緊，不送氣"],["ㄸ","쌍디귿","tt","喉嚨繃緊"],
-["ㅃ","쌍비읍","pp","喉嚨繃緊"],["ㅆ","쌍시옷","ss","喉嚨繃緊"],["ㅉ","쌍지읒","jj","喉嚨繃緊"]];
+["ㄲ","쌍기역","kk","喉嚨和舌根繃緊，完全不噴氣，發一個短而硬的「ㄍ」。手放在嘴前感覺不到氣。","兩個 ㄱ 並排＝繃緊，不是唸兩次。和 ㄱ（輕）、ㅋ（噴氣）一起比較著聽。","꼭","一定"],
+["ㄸ","쌍디귿","tt","喉嚨繃緊、不噴氣，發一個短而硬的「ㄉ」。","兩個 ㄷ 並排＝繃緊。和 ㄷ、ㅌ 一組。","딸기","草莓"],
+["ㅃ","쌍비읍","pp","雙唇和喉嚨繃緊、不噴氣，發一個短而硬的「ㄅ」。","兩個 ㅂ 並排＝繃緊。和 ㅂ、ㅍ 一組。","빵","麵包"],
+["ㅆ","쌍시옷","ss","繃緊的「ㄙ」，聲音比 ㅅ 更尖、更用力。接 ㅣ 時是繃緊的「ㄒ」。","兩個 ㅅ 並排＝繃緊。ㅅ 只有輕和繃緊兩種，沒有噴氣版。","싸요","便宜"],
+["ㅉ","쌍지읒","jj","喉嚨繃緊、不噴氣，發一個短而硬的「ㄐ」。","兩個 ㅈ 並排＝繃緊。和 ㅈ、ㅊ 一組。","진짜","真的"]];
 
-/* 받침（收尾音）：27 種寫法只有 7 種聲音 */
+/* 받침（收尾音）：27 種寫法只有 7 種聲音 [代表字母, 所有寫法, 聲音, 說明, 例字, 例字意思] */
 const BATCHIM = [
-["ㄱ","ㄱ ㄲ ㅋ ㄳ ㄺ","k","舌根抵住不放開，像英文 book 的 k"],
-["ㄴ","ㄴ ㄵ ㄶ","n","舌尖抵上顎，像 sun"],
-["ㄷ","ㄷ ㅅ ㅆ ㅈ ㅊ ㅌ ㅎ","t","舌尖抵住不放開，像 cat"],
-["ㄹ","ㄹ ㄼ ㄽ ㄾ ㅀ","l","舌尖捲起，像 ball"],
-["ㅁ","ㅁ ㄻ","m","雙唇閉合，像 room"],
-["ㅂ","ㅂ ㅍ ㅄ ㄿ","p","雙唇閉合不放開，像 cup"],
-["ㅇ","ㅇ","ng","鼻音，像 song"]];
+["ㄱ","ㄱ ㄲ ㅋ ㄳ ㄺ","k","唸完母音後，舌根往上頂住就停，不要放開，也不要多唸出「ㄍ」。會台語的話，像「六」la̍k 的結尾。","책","書"],
+["ㄴ","ㄴ ㄵ ㄶ","n","舌尖頂住上排牙齒後面，唸「ㄣ」的尾音。","산","山"],
+["ㄷ","ㄷ ㅅ ㅆ ㅈ ㅊ ㅌ ㅎ","t","舌尖頂住上排牙齒後面就停，不放開，也不要多唸出「ㄉ」。這七種寫法在收尾時都唸這個音，所以 옷（衣服）、꽃（花）、낮（白天）的結尾聽起來一樣。會台語的話，像「日」ji̍t 的結尾。","옷","衣服"],
+["ㄹ","ㄹ ㄼ ㄽ ㄾ ㅀ","l","舌尖輕輕頂住上排牙齒後面，唸出 l 的聲音。不要捲舌，不是「兒」的音。","물","水"],
+["ㅁ","ㅁ ㄻ","m","雙唇閉起來，聲音從鼻子出來，閉著嘴就停。國語沒有這種結尾，很容易多唸出「ㄇㄨ」，要避免。","밤","晚上"],
+["ㅂ","ㅂ ㅍ ㅄ ㄿ","p","雙唇閉起來就停，不打開，也不要多唸出「ㄅ」。會台語的話，像「十」tsa̍p 的結尾。","밥","飯"],
+["ㅇ","ㅇ","ng","舌根往上抵，聲音從鼻子出來，像「ㄥ」的尾音。注意：ㅇ 在字的上面不發音，在最下面才唸 ng。","방","房間"]];
 
 /* ============ 발음 규칙 ============ */
 const PRON = [
@@ -757,26 +786,26 @@ const BUSAN = [
 
 /* ============ 拼讀、音辨與雙向情境 ============ */
 const SYLLABLE = [
- ["가 나 다 라 마","ga na da ra ma","直母音 ㅏ 拼讀"],
- ["거 너 더 러 머","geo neo deo reo meo","直母音 ㅓ 拼讀"],
- ["고 노 도 로 모","go no do ro mo","橫母音 ㅗ 拼讀"],
- ["구 누 두 루 무","gu nu du ru mu","橫母音 ㅜ 拼讀"],
- ["기 니 디 리 미","gi ni di ri mi","母音 ㅣ 拼讀"],
- ["갸 냐 댜 랴 먀","gya nya dya rya mya","帶 y 的母音"],
- ["과 워 위 의","gwa wo wi ui","複合母音"],
- ["감 난 달 밤 강","gam nan dal bam gang","加入七種收尾音"],
- ["먹다 한국 친구","meoktta hanguk chingu","短詞連續拼讀"],
- ["안녕하세요","annyeonghaseyo","完整音節串讀"]
+ ["가 나 다 라 마","ga na da ra ma","子音＋ㅏ。直的母音放在子音右邊：ㄱ＋ㅏ＝가（ga）、ㄴ＋ㅏ＝나（na）。先唸子音，再接母音。"],
+ ["거 너 더 러 머","geo neo deo reo meo","子音＋ㅓ：ㄱ＋ㅓ＝거。ㅓ 的嘴唇不要圓，和 ㅗ 分清楚。"],
+ ["고 노 도 로 모","go no do ro mo","子音＋ㅗ。橫的母音放在子音下面：ㄱ＋ㅗ＝고。嘴唇要嘟圓。"],
+ ["구 누 두 루 무","gu nu du ru mu","子音＋ㅜ：ㄱ＋ㅜ＝구。母音一樣在下面，嘴唇噘起往前。"],
+ ["기 니 디 리 미","gi ni di ri mi","子音＋ㅣ：ㄱ＋ㅣ＝기、ㄹ＋ㅣ＝리。ㅣ 是直的，放在右邊。"],
+ ["갸 냐 댜 랴 먀","gya nya dya rya mya","子音＋ㅑ：ㄱ＋ㅑ＝갸。ㅑ 比 ㅏ 多一短橫，所以多一個 y 音：가 ga → 갸 gya。"],
+ ["과 워 위 의","gwa wo wi ui","複合母音：ㄱ＋ㅘ＝과（gwa）。워、위、의 的 ㅇ 在開頭不發音，只唸母音。"],
+ ["감 난 달 밤 강","gam nan dal bam gang","加上收尾音：가＋ㅁ＝감。收尾音寫在最下面，唸完母音就把嘴停在那個位置，不要多發一個音。"],
+ ["먹다 한국 친구","meoktta hanguk chingu","兩個字連著唸：먹다（吃）、한국（韓國）、친구（朋友）。먹다 的 다 會變成硬音，實際唸 먹따。"],
+ ["안녕하세요","annyeonghaseyo","「你好」：안・녕・하・세・요 五個字。先一個字一個字唸，熟了再連起來。"]
 ];
 const CONTRAST = [
- ["가 · 카 · 까","ㄱ／ㅋ／ㄲ","輕音、送氣音、緊音"],
- ["다 · 타 · 따","ㄷ／ㅌ／ㄸ","輕音、送氣音、緊音"],
- ["바 · 파 · 빠","ㅂ／ㅍ／ㅃ","輕音、送氣音、緊音"],
- ["자 · 차 · 짜","ㅈ／ㅊ／ㅉ","輕音、送氣音、緊音"],
- ["사 · 싸","ㅅ／ㅆ","輕音、緊音"],
- ["어 · 오","ㅓ／ㅗ","嘴形不圓、嘴唇圓"],
- ["우 · 으","ㅜ／ㅡ","嘴唇噘起、嘴角拉平"],
- ["애 · 에","ㅐ／ㅔ","現代首爾語多數情況接近同音"]
+ ["가 · 카 · 까","ㄱ／ㅋ／ㄲ","가 輕：氣很少。카 噴氣：手放嘴前感覺得到一口氣。까 繃緊：喉嚨用力、沒有氣，聲音短而硬。"],
+ ["다 · 타 · 따","ㄷ／ㅌ／ㄸ","다 輕：氣很少。타 噴氣：有一口氣。따 繃緊：喉嚨用力、沒有氣，聲音短而硬。"],
+ ["바 · 파 · 빠","ㅂ／ㅍ／ㅃ","바 輕：氣很少。파 噴氣：有一口氣。빠 繃緊：雙唇和喉嚨用力、沒有氣。"],
+ ["자 · 차 · 짜","ㅈ／ㅊ／ㅉ","자 輕：氣很少。차 噴氣：有一口氣。짜 繃緊：喉嚨用力、沒有氣。"],
+ ["사 · 싸","ㅅ／ㅆ","사 輕：帶一點氣。싸 繃緊：聲音更尖、更用力。ㅅ 沒有噴氣版，只有這兩種。"],
+ ["어 · 오","ㅓ／ㅗ","어 嘴巴張開、嘴唇不圓。오 嘴唇嘟圓。對著鏡子唸，看嘴唇有沒有圓起來。"],
+ ["우 · 으","ㅜ／ㅡ","우 嘴唇噘圓往前推。으 嘴角往兩邊拉平，嘴唇不動。"],
+ ["애 · 에","ㅐ／ㅔ","現代韓語兩個幾乎同音，都唸「ㄝ」。聽不出差別很正常，只有拼字時要分。"]
 ];
 const DIALOGUE = [
  {t:"地鐵問路",p:[
@@ -833,13 +862,25 @@ const SIGN = [
 /* ============ 建卡 ============ */
 const DECKS=[];
 function push(o){DECKS.push(o);}
-VOWEL.forEach((v,i)=>push({id:"v"+i,deck:"jamo",front:v[0],back:v[2],sub:v[1],extra:"기본 모음・"+v[3],kr:v[1]}));
-VOWEL2.forEach((v,i)=>push({id:"v2"+i,deck:"jamo",front:v[0],back:v[2],sub:v[1],extra:"복합 모음・"+v[3],kr:v[1]}));
-CONS.forEach((c,i)=>push({id:"c"+i,deck:"jamo",front:c[0],back:c[2],sub:comp(c[0],"ㅏ",""),extra:"기본 자음・"+c[3]+"・名稱 "+c[1],kr:comp(c[0],"ㅏ","")}));
-CONS2.forEach((c,i)=>push({id:"c2"+i,deck:"jamo",front:c[0],back:c[2],sub:comp(c[0],"ㅏ",""),extra:"쌍자음・"+c[3]+"・名稱 "+c[1],kr:comp(c[0],"ㅏ","")}));
+/* 字母說明：卡片「先學」畫面、答案、字母頁共用 */
+const JAMO_CAT={vowel:"基本母音",vowel2:"複合母音",cons:"基本子音",cons2:"雙子音（緊音）"};
+function jamoSound(k,group){return (group==="vowel"||group==="vowel2")?k[1]:comp(k[0],"ㅏ","");}
+function jamoInfo(k,group){
+  const isV=group==="vowel"||group==="vowel2",sy=jamoSound(k,group);
+  return {cat:JAMO_CAT[group],
+    write:isV?`單獨寫成一個字時，前面要加上不發音的 ㅇ 佔位子，寫成「${sy}」。`
+         :(k[0]==="ㅇ"?"配上母音 ㅏ 寫成「아」，這時 ㅇ 不發音，只唸 a。放到下面的「강」才唸 ng。"
+         :`子音不能單獨唸，配上母音 ㅏ 就是「${sy}」（${roman(sy)}）。`),
+    say:k[3],tip:k[4],ex:k[5]?[k[5],k[6]]:null,name:isV?"":k[1]};
+}
+VOWEL.forEach((v,i)=>push({id:"v"+i,deck:"jamo",front:v[0],back:v[2],sub:v[1],extra:JAMO_CAT.vowel,info:jamoInfo(v,"vowel"),kr:v[1]}));
+VOWEL2.forEach((v,i)=>push({id:"v2"+i,deck:"jamo",front:v[0],back:v[2],sub:v[1],extra:JAMO_CAT.vowel2,info:jamoInfo(v,"vowel2"),kr:v[1]}));
+CONS.forEach((c,i)=>push({id:"c"+i,deck:"jamo",front:c[0],back:c[2],sub:jamoSound(c,"cons"),extra:JAMO_CAT.cons,info:jamoInfo(c,"cons"),kr:jamoSound(c,"cons")}));
+CONS2.forEach((c,i)=>push({id:"c2"+i,deck:"jamo",front:c[0],back:c[2],sub:jamoSound(c,"cons2"),extra:JAMO_CAT.cons2,info:jamoInfo(c,"cons2"),kr:jamoSound(c,"cons2")}));
 SYLLABLE.forEach((x,i)=>push({id:"sy"+i,deck:"syllable",front:x[0],back:x[1],sub:"",extra:x[2],kr:x[0]}));
 CONTRAST.forEach((x,i)=>push({id:"ct"+i,deck:"contrast",front:x[0],back:x[1],sub:"",extra:x[2],kr:x[0].split("·").join(" ")}));
-BATCHIM.forEach((b,i)=>push({id:"b"+i,deck:"batchim",front:b[0]+" 받침",back:b[2],sub:b[1],extra:b[3],kr:""}));
+BATCHIM.forEach((b,i)=>push({id:"b"+i,deck:"batchim",front:b[0]+" 받침",back:b[2],sub:"",extra:b[3],kr:b[4],
+  info:{cat:"收尾音（받침）：寫在字的最下面",wl:"哪些寫法",write:`寫成 ${b[1]} 時，都唸這個音。`,say:b[3],ex:[b[4],b[5]]}}));
 WORD.forEach((w,i)=>push({id:"w"+i,deck:"word",front:w[0],back:w[1],sub:"",extra:w[2],kr:w[0]}));
 GRAMK.forEach((g,i)=>push({id:"g"+i,deck:"gram",front:g.q,back:g.o[g.a],sub:g.p,extra:g.n,kr:"",opts:g.o,gram:g}));
 let dn=0;
@@ -1106,6 +1147,8 @@ function render(top){
 }
 function bind(){
   app.querySelectorAll("[data-say]").forEach(e=>e.onclick=ev=>{ev.stopPropagation();say(e.dataset.say);});
+  app.querySelectorAll("[data-jamo]").forEach(e=>e.onclick=()=>{
+    say(e.dataset.sy);jamoSel=jamoSel===e.dataset.jamo?"":e.dataset.jamo;render();});
   app.querySelectorAll("[data-slow]").forEach(e=>e.onclick=ev=>{ev.stopPropagation();say(e.dataset.slow,0.4);});
   app.querySelectorAll("[data-start]").forEach(e=>e.onclick=()=>startSession(e.dataset.start));
   app.querySelectorAll("[data-type]").forEach(e=>e.onclick=()=>startTyping(e.dataset.type));
@@ -1272,16 +1315,23 @@ function vToday(){
 }
 
 /* --- 韓文字 --- */
-function jamoTable(list,cols,pre){
-  return `<div class="kt" style="grid-template-columns:repeat(${cols},1fr)">`+list.map((k,i)=>
-   {const sy=/[ㅏ-ㅣ]/.test(k[0])?k[1]:comp(k[0],"ㅏ","");
-   return `<div data-say="${sy}"><b class="kr">${k[0]}</b><s class="kr">${sy}</s><em>${k[2]}</em></div>`;}).join("")+`</div>`;
+let jamoSel="";
+function jamoTable(list,cols,group){
+  const sel=list.find(k=>k[0]===jamoSel);
+  return `<div class="kt" style="grid-template-columns:repeat(${cols},1fr)">`+list.map(k=>{
+    const sy=jamoSound(k,group);
+    return `<div data-jamo="${k[0]}" data-sy="${sy}" class="${k[0]===jamoSel?"on":""}"><b class="kr">${k[0]}</b><s class="kr">${sy}</s><em>${k[2]}</em></div>`;
+  }).join("")+`</div>`+(sel?`<div class="gcard" style="margin-top:8px">
+    <div style="display:flex;align-items:baseline;gap:12px"><span class="kr" style="font-size:40px;line-height:1">${sel[0]}</span>
+      <span class="romaji">${sel[2]}</span>
+      <button class="spk" data-say="${jamoSound(sel,group)}" style="margin:0 0 0 auto">▸ 聽發音</button></div>
+    ${infoHTML(jamoInfo(sel,group))}</div>`:"");
 }
 function vHangul(){
   const d=BY.jamo.filter(c=>mastery(c.id)===2).length;
   return `<div class="wrap"><h1>한글 <span class="zh">韓文字母</span></h1>
   <p class="sub">這一頁教你韓文字怎麼組成。先學基本母音10個，再學基本子音14個；複合母音與雙子音放到後面。</p>
-  <div class="learnNote"><b>零基礎重點：</b>先記住字形和聲音，不需要背「기역、니은」等韓文名稱。點每一格可以聽發音，子音用「子音＋ㅏ」示範，例如 ㄱ→가。已掌握 ${d}/${BY.jamo.length}</div>
+  <div class="learnNote"><b>零基礎重點：</b>先記住字形和聲音，不需要背「기역、니은」等韓文名稱。點任一個字母可以聽發音，並在表格下方看到怎麼唸、怎麼記和例字。子音用「子音＋ㅏ」示範，例如 ㄱ→가。已掌握 ${d}/${BY.jamo.length}</div>
   <button class="cta" data-start="jamo">練習字母</button>
   <h2>字是怎麼組起來的</h2>
   <div class="gcard">
@@ -1300,17 +1350,18 @@ function vHangul(){
     </div>
     <div class="n" style="margin-top:12px">母音是直的（ㅏㅓㅣ）就放右邊，是橫的（ㅗㅜㅡ）就放下面。收尾音一律在最下面。</div>
   </div>
-  <h2>기본 모음 10｜基本母音10個</h2>${jamoTable(VOWEL,5)}
-  <h2>기본 자음 14｜基本子音14個</h2>${jamoTable(CONS,5)}
-  <h2>복합 모음 11｜複合母音11個</h2>${jamoTable(VOWEL2,4)}
-  <h2>쌍자음 5｜雙子音5個</h2>${jamoTable(CONS2,5)}
-  <p class="sub" style="margin-top:8px">쌍자음 不是「唸兩次」，是喉嚨繃緊、不送氣。ㄱ 輕、ㅋ 送氣、ㄲ 繃緊，三個一組對比著記最快。</p>
+  <h2>基本母音 10 個 <span class="kr" style="font-size:13px;color:var(--ink3)">기본 모음</span></h2>${jamoTable(VOWEL,5,"vowel")}
+  <h2>基本子音 14 個 <span class="kr" style="font-size:13px;color:var(--ink3)">기본 자음</span></h2>${jamoTable(CONS,5,"cons")}
+  <h2>複合母音 11 個 <span class="kr" style="font-size:13px;color:var(--ink3)">복합 모음</span></h2>${jamoTable(VOWEL2,4,"vowel2")}
+  <h2>雙子音 5 個 <span class="kr" style="font-size:13px;color:var(--ink3)">쌍자음</span></h2>${jamoTable(CONS2,5,"cons2")}
+  <p class="sub" style="margin-top:8px">雙子音不是「唸兩次」，而是喉嚨繃緊、不噴氣。ㄱ 輕、ㅋ 噴氣、ㄲ 繃緊，三個一組對比著記最快。</p>
   <h2>받침（收尾音）${BY.batchim.filter(c=>mastery(c.id)===2).length}/7</h2>
   <p class="sub">27 種寫法，但只有 7 種聲音。收尾音<b>不會爆出來</b>——ㄱ 收尾是舌根抵住就停，不是唸「ㄍ」。</p>
   <button class="cta2" data-start="batchim">練習收尾音</button>
   ${BATCHIM.map(b=>`<div class="gcard"><div class="p kr">${b[0]}　<span style="font-size:14px;color:var(--indigo)">${b[2]}</span></div>
     <div class="n" style="margin:2px 0 6px">${b[3]}</div>
-    <div style="font-size:12.5px;color:var(--ink2)">寫成這些都唸同一個音：<span class="kr">${b[1]}</span></div></div>`).join("")}
+    <div style="font-size:12.5px;color:var(--ink2)">寫成這些都唸同一個音：<span class="kr">${b[1]}</span></div>
+    <button class="spk" data-say="${b[4]}" style="margin-top:8px">▸ 例字 <span class="kr">${b[4]}</span>　${b[5]}</button></div>`).join("")}
   <h2>音節拼讀</h2>
   <p class="sub">不要只背字母名稱，要練到看到陌生音節也能直接拆解。先慢慢逐字讀，再連成一串。</p>
   <button class="cta2" data-start="syllable">練習音節拼讀</button>
@@ -1540,6 +1591,16 @@ function startSession(kind){
   const q=buildQueue();if(!q.length){toast("今天的排程都做完了");return;}
   session={q,i:0,n:q.length};shown=false;pick=null;curOpts=null;undoSnap=null;played=0;taught=false;render(true);
 }
+function infoHTML(f){
+  return `<div class="info">
+    <div class="icat">${esc(f.cat)}</div>
+    ${f.write?`<div><b>${f.wl||"寫成字"}</b>${esc(f.write)}</div>`:""}
+    <div><b>怎麼唸</b>${esc(f.say)}</div>
+    ${f.tip?`<div><b>怎麼記</b>${esc(f.tip)}</div>`:""}
+    ${f.ex?`<div><b>例字</b><button class="spk ex kr" data-say="${esc(f.ex[0])}">▸ ${esc(f.ex[0])}</button>${esc(f.ex[1])}</div>`:""}
+    ${f.name?`<div class="iname">字母名稱：<span class="kr">${esc(f.name)}</span>。韓國人說字母時用的名字，現在不用背。</div>`:""}
+  </div>`;
+}
 function answerBlock(c,isNew,pick){
   const norm=x=>String(x||"").toLowerCase().replace(/[\s.,!?。！？、'’]/g,"");
   const wrong=pick!==null&&norm(pick)!==norm(c.back)
@@ -1553,10 +1614,13 @@ function answerBlock(c,isNew,pick){
       <span style="font-size:11px;color:var(--ink3)">　${pr.notes.join("・")}</span></div>`:"";
   const rm=c.kr&&S.roma?`<div style="font-size:15px;color:var(--indigo);letter-spacing:.03em;margin-top:2px">${esc(roman(c.kr))}</div>`:"";
 
-  if(c.deck==="jamo"||c.deck==="batchim"||c.deck==="syllable"||c.deck==="contrast")
+  if(c.info)
     return `<div class="romaji">${esc(c.back)}</div>
       ${c.sub?`<div class="hint kr" style="font-size:17px">${esc(c.sub)}</div>`:""}
-      <div class="hint">${esc(c.extra)}</div>${audio}${wrong}`;
+      ${audio}${wrong}${infoHTML(c.info)}`;
+  if(c.deck==="syllable"||c.deck==="contrast")
+    return `<div class="romaji">${esc(c.back)}</div>
+      ${audio}${wrong}<div class="info"><div>${esc(c.extra)}</div></div>`;
 
   if(c.deck==="word"||c.deck==="sign")   /* 正面是韓文，背面給意思＋實際發音 */
     return `<div class="mid" style="font-size:26px">${esc(c.back)}</div>
@@ -1605,11 +1669,12 @@ function drawStudy(){
     document.getElementById("bk").onclick=()=>{session=null;syncNow();render(true);};return;
   }
   const c=session.q[session.i],isNew=!seen(c.id);
-  const teachNow=isNew&&c.gram&&!taught;
+  const teachNow=isNew&&(c.gram||c.info)&&!taught&&!session.practice;
+  if(teachNow&&c.info&&c.kr&&!played){played=1;setTimeout(()=>say(c.kr),200);}
   if(isNew&&!curOpts)curOpts=makeOpts(c);
   if(c.audio&&!shown&&!played){played=1;setTimeout(()=>say(c.kr),200);}
   const big=(c.deck==="jamo"||c.deck==="batchim");
-  const tip=teachNow?"文法是規則，沒學過猜不出來。先看懂再作答"
+  const tip=teachNow?(c.gram?"文法是規則，沒學過猜不出來。先看懂再作答":"第一次學的字母：先聽聲音、看說明，再來測驗")
     :(shown?"想不出來就按「不會」。評分誠實，排程才會準"
     :(isNew?"第一次見面，先猜猜看。選錯不扣分":(TIP[c.deck]||"先想出答案")+"，再看答案"));
   app.innerHTML=`<div class="study">
@@ -1617,7 +1682,12 @@ function drawStudy(){
     <div>${session.i+1} / ${session.q.length}</div></div>
   <div class="face" style="${teachNow?"align-items:stretch;justify-content:flex-start;text-align:left":""}">
     ${!teachNow?`<div class="tag">${PROMPT[c.deck]||"先想答案，再翻卡確認"}</div>`:""}
-    ${teachNow?`<div class="mid kr" style="font-size:22px;margin-bottom:8px">${esc(c.gram.p)}</div>
+    ${teachNow&&c.info?`<div class="big kr" style="text-align:center">${esc(c.front)}</div>
+      <div class="romaji" style="text-align:center;margin-top:4px">${esc(c.back)}</div>
+      ${c.kr?`<div style="display:flex;gap:8px;justify-content:center;margin-top:10px">
+        <button class="spk" data-say="${esc(c.kr)}">▸ 聽發音</button><button class="spk" data-slow="${esc(c.kr)}">▸ 更慢</button></div>`:""}
+      ${infoHTML(c.info)}`
+    :teachNow?`<div class="mid kr" style="font-size:22px;margin-bottom:8px">${esc(c.gram.p)}</div>
       <div style="font-size:14px;color:var(--ink2);line-height:1.7">${esc(c.gram.n)}</div>
       ${c.gram.ex.map(e=>`<div style="border-left:2px solid var(--ruleS);padding-left:11px;margin-top:12px">
         ${sentence(e[0],16)}<div style="font-size:12.5px;color:var(--ink2);margin-top:3px">${esc(e[1])}</div></div>`).join("")}`
