@@ -139,6 +139,7 @@ nav button.on b{opacity:1}
 .stage .mini i{display:block;height:100%;background:var(--ok)}
 .notice{padding:11px 13px;border-left:3px solid var(--indigo);background:var(--paper2);border-radius:0 var(--r) var(--r) 0;
   font-size:12.5px;color:var(--ink2);margin:10px 0}
+.dlg{background:var(--card);border:1px solid var(--rule);border-radius:var(--r);margin-bottom:7px}
 .dialog{background:var(--card);border:1px solid var(--rule);border-radius:var(--r);padding:13px;margin-bottom:10px}
 .bubble{padding:8px 10px;background:var(--paper2);border-radius:9px;margin-top:7px;font-size:14px}
 .bubble.you{margin-left:20px;border-left:2px solid var(--indigo)}
@@ -202,13 +203,19 @@ const SPECIAL_PRON = {
   "깻잎":["깬닙","ㄴ 첨가"],"색연필":["생년필","ㄴ 첨가・비음화"],
   "읽다":["익따","겹받침・경음화"],"읽어요":["일거요","겹받침・연음"],
   "많다":["만타","ㅎ 격음화"],"앉아요":["안자요","겹받침・연음"],
-  "나의":["나에","의 발음"]
+  "나의":["나에","의 발음"],
+  "부산역":["부산녁","ㄴ 첨가"],"서면역":["서면녁","ㄴ 첨가"],"지하철역":["지하철력","ㄴ 첨가・유음화"],
+  "흰여울":["힌녀울","ㄴ 첨가・의 발음"],"별일":["별릴","ㄴ 첨가・유음화"],"결제":["결쩨","한자어 경음화"]
 };
+const SPECIAL_KEYS = Object.keys(SPECIAL_PRON).sort((a,b)=>b.length-a.length);
 
 /* 한 어절(띄어쓰기 단위) 안에서 발음 변화 적용 */
 function pronounceWord(word){
-  if(SPECIAL_PRON[word])return {text:SPECIAL_PRON[word][0],notes:SPECIAL_PRON[word][1].split("・")};
   const notes = [];
+  /* 先套用固定讀音。可出現在詞中，例如 부산역까지 → 부산녁까지 */
+  for(const k of SPECIAL_KEYS){
+    if(word.includes(k)){ word = word.split(k).join(SPECIAL_PRON[k][0]); notes.push(...SPECIAL_PRON[k][1].split("・")); }
+  }
   let syl = [...word].map(c => decomp(c) || {raw:c});
   for(let i=0;i<syl.length;i++){
     const a = syl[i], b = syl[i+1];
@@ -218,6 +225,11 @@ function pronounceWord(word){
     let jong = a.jong, carry = null;
     if(DOUBLE_JONG[jong]){ [jong, carry] = DOUBLE_JONG[jong]; }
 
+    /* 0) ㄹ 뒤 경음화 — 意志語尾 ㄹ게：할게요 → 할께요 */
+    if(a.jong==="ㄹ" && b.cho==="ㄱ" && b.jung==="ㅔ" && !b.jong){
+      const c2 = syl[i+2];
+      if(!c2 || c2.raw || (c2.cho==="ㅇ"&&c2.jung==="ㅛ"&&!c2.jong)){ b.cho="ㄲ"; notes.push("ㄹ 뒤 경음화"); continue; }
+    }
     /* 1) ㅎ 탈락 / 격음화 */
     if((a.jong==="ㅎ"||a.jong==="ㄶ"||a.jong==="ㅀ")){
       if(b.cho==="ㅇ"){                      /* 좋아요 → 조아요, 싫어요 → 시러요 */
@@ -286,14 +298,24 @@ function pronounceWord(word){
   return { text: out, notes: [...new Set(notes)] };
 }
 
+/* ㄹ/을 後面接 거・수・줄 時變硬音：갈 거예요 → 갈 꺼예요、할 수 → 할 쑤 */
+const TENSE_NEXT = /^(거[예야에지죠니든요]|거$|것|수$|수[는도가]|줄)/;
 function pronounce(sentence){
   const parts = sentence.split(/(\s+)/);
   const notes = [];
+  let prevL = false;
   const text = parts.map(p=>{
     if(/^\s*$/.test(p)) return p;
     const r = pronounceWord(p);
+    let t = r.text;
     notes.push(...r.notes);
-    return r.text;
+    if(prevL && TENSE_NEXT.test(p)){
+      const d = decomp(t[0]);
+      if(d && TENSE[d.cho]){ t = comp(TENSE[d.cho],d.jung,d.jong) + t.slice(1); notes.push("ㄹ 뒤 경음화"); }
+    }
+    const last = decomp(p[p.length-1]);
+    prevL = !!(last && last.jong==="ㄹ");
+    return t;
   }).join("");
   return { text, notes:[...new Set(notes)] };
 }
@@ -321,10 +343,7 @@ function romanizeSpoken(spoken){
 }
 /* 표기 그대로가 아니라 「실제 소리」를 로마자로 */
 function roman(sentence){
-  return sentence.split(/(\s+)/).map(p=>{
-    if(/^\s*$/.test(p)) return p;
-    return romanizeSpoken(pronounceWord(p).text);
-  }).join("");
+  return pronounce(sentence).text.split(/(\s+)/).map(p=>/^\s*$/.test(p)?p:romanizeSpoken(p)).join("");
 }
 
 
@@ -380,8 +399,10 @@ const PRON = [
  ex:["신라","연락","일년","설날"]},
 {n:"구개음화",t:"顎音化",g:"ㄷㅌ 收尾音後面接「이」時，變成 ㅈㅊ。「같이」唸「가치」。",
  ex:["같이","굳이","닫히다"]},
-{n:"ㄴ 첨가",t:"添加ㄴ",g:"部分合成詞中，收尾音後接 이、야、여、요、유 時會加入ㄴ，並可能再發生鼻音化。",
- ex:["학년","깻잎","색연필"]},
+{n:"ㄹ 뒤 경음화",t:"ㄹ後的硬音化",g:"表示未來、意志或可能的 ㄹ/을 後面，接 거、수、줄 或語尾 게 時會繃緊成硬音。「계산할게요」唸「계산할께요」、「갈 수 있어요」唸「갈 쑤 이써요」，旅遊句尾很常出現。部分漢字詞 ㄹ 後的 ㄷㅅㅈ 也會變硬音（결제→결쩨），但固有詞不一定，遇到再個別記。",
+ ex:["계산할게요","갈 거예요","할 수 있어요","결제"]},
+{n:"ㄴ 첨가",t:"添加ㄴ",g:"部分合成詞中，收尾音後接 이、야、여、요、유 時會加入ㄴ，並可能再發生鼻音化或流音化。站名最常遇到：「부산역」唸「부산녁」，不是「부사녁」。哪些詞會添加無法只看拼寫判斷，要連同詞語一起記。",
+ ex:["부산역","서면역","별일","깻잎","색연필"]},
 {n:"의 발음",t:"의的讀法",g:"字首的의常讀ui；非字首常接近i；表示『的』的助詞時常讀e。實際使用時要連同詞語一起記。",
  ex:["의사","회의","나의 친구"]},
 {n:"겹받침",t:"複合收尾音",g:"ㄳ、ㄵ、ㄶ、ㄺ等複合收尾音會依後面的聲音保留、連音或改變，不能只看單一字母。",
@@ -474,7 +495,7 @@ const GRAMK = [
 {p:"고 싶다（想要）",n:"語幹＋고 싶다。第三人稱要用 고 싶어하다。",
  ex:[["보고 싶어요.","想見你／想你。"],["집에 가고 싶어.","想回家。"]],
  q:"먹___ 싶어요.",o:["고","서","지","면"],a:0},
-{p:"주세요（請給我）",n:"名詞＋주세요；動詞て形（아/어）＋ 주세요＝請幫我…。",
+{p:"주세요（請給我）",n:"名詞＋주세요；動詞 아/어 形＋주세요＝請幫我…。",
  ex:[["이거 주세요.","請給我這個。"],["기다려 주세요.","請等一下。"]],
  q:"물 좀 ___.",o:["주세요","줘요","주다","주고"],a:0},
 {p:"ㄹ/을 거예요（未來）",n:"表示打算或推測。語幹無收尾音＋ㄹ 거예요，有收尾音＋을 거예요。",
@@ -545,7 +566,16 @@ const GRAMK = [
  q:"감사합___.",o:["니다","어요","니까","세요"],a:0},
 {p:"不規則變化入門",n:"部分詞幹在接母音語尾時會改變。先整組記：듣다→들어요、덥다→더워요、모르다→몰라요。",
  ex:[["음악을 들어요.","聽音樂。"],["오늘은 더워요.","今天很熱。"],["저도 몰라요.","我也不知道。"]],
- q:"듣다 的해요體是？",o:["들어요","듣어요","들아요","듣아요"],a:0}];
+ q:"듣다 的해요體是？",o:["들어요","듣어요","들아요","듣아요"],a:0},
+{p:"잖아(요)（你明明知道）",n:"語幹＋잖아요，提醒對方「不是說過了嗎／你也知道啊」。半語是잖아，戲裡吵架、撒嬌都很常聽到。",
+ ex:[["내가 말했잖아.","我不是跟你說過了嗎。"],["비가 오잖아요.","在下雨啊（你看）。"]],
+ q:"너도 알___.（你也知道啊）",o:["잖아","거든","는데","네"],a:0},
+{p:"거든(요)（因為…啦）",n:"語幹＋거든요，補充對方不知道的理由或背景。常用來回答「왜?」。",
+ ex:[["오늘 좀 바쁘거든요.","因為我今天有點忙啦。"],["나 여자친구 있거든.","我可是有女朋友的。"]],
+ q:"왜 안 가? — 시간이 없___.（因為沒時間）",o:["거든","잖아","는데","고"],a:0},
+{p:"는데 / (으)ㄴ데（…呢、可是…）",n:"先鋪陳背景再說重點；放句尾表示話沒說完或委婉。動詞與있다/없다接는데，形容詞接(으)ㄴ데。",
+ ex:[["지금 가는데 같이 갈래?","我現在要去，要一起嗎？"],["이거 맛있는데요?","這個很好吃耶？"],["좋은데 너무 비싸요.","是很好，可是太貴了。"]],
+ q:"비가 오___ 우산 있어요?（在下雨耶，有傘嗎）",o:["는데","거든","잖아","네요"],a:0}];
 
 /* ============ 드라마 대사 ============ */
 /* {t:분류, l:[[한글(반말), 중국어, 敬語版]]} */
@@ -621,7 +651,13 @@ const COUNTER = [
  g:"百貨公司、地鐵站常用"}];
 
 /* ============ 여행 회화（전부 존댓말） ============ */
+/* 第3欄是固定卡片 id：新增的句子帶固定 id 且不佔流水號，舊卡的學習紀錄才不會錯位 */
 const TRAVEL = [
+{t:"사람 부르기",s:"叫人與稱呼",p:[
+ ["저기요.","不好意思（叫店員、叫住路人）。","t_call1"],
+ ["여기요.","這邊（在座位上叫店員）。","t_call2"],
+ ["사장님, 주문할게요.","老闆，我要點餐。（對店主、店員都可用）","t_call3"],
+ ["이모, 여기 물 좀 주세요.","阿姨，這桌請給我水。（小吃店叫中年女店員）","t_call4"]]},
 {t:"공항・교통",s:"機場與交通",p:[
  ["부산역까지 어떻게 가요?","到釜山站怎麼走？"],
  ["지하철역이 어디예요?","地鐵站在哪裡？"],
@@ -658,7 +694,9 @@ const TRAVEL = [
  ["짐 좀 맡길 수 있어요?","可以寄放行李嗎？"],
  ["체크아웃 몇 시예요?","退房是幾點？"],
  ["수건 좀 더 주세요.","請再給我幾條毛巾。"],
- ["에어컨이 안 돼요.","冷氣壞了。"],
+ ["난방이 안 돼요.","暖氣不能用。","t_heat","swap"],
+ ["뜨거운 물이 안 나와요.","沒有熱水。","t_hotwater"],
+ ["방이 너무 추워요.","房間太冷了。","t_cold"],
  ["방 좀 바꿔 주세요.","請幫我換房間。"]]},
 {t:"쇼핑",s:"購物",p:[
  ["이거 얼마예요?","這個多少錢？"],
@@ -755,7 +793,19 @@ const DIALOGUE = [
  {t:"聽不懂時",p:[
   ["천천히 말해 주세요.","請說慢一點。","네, 다시 말씀드릴게요.","好的，我再說一次。"],
   ["여기에 써 주세요.","請寫在這裡。","네, 적어 드릴게요.","好的，我寫給您。"],
-  ["제가 잘 이해했는지 확인할게요.","我確認一下有沒有理解正確。","네, 말씀해 보세요.","好的，您說說看。"]]}
+  ["제가 잘 이해했는지 확인할게요.","我確認一下有沒有理解正確。","네, 말씀해 보세요.","好的，您說說看。"]]},
+ {t:"店員先問你",first:"them",p:[
+  ["여기서 먹을게요.","我要內用。","드시고 가세요?","要在這裡吃嗎？"],
+  ["가져갈게요.","我要外帶。","포장이세요?","是外帶嗎？"],
+  ["두 명이요.","兩位。","몇 분이세요?","請問幾位？"],
+  ["아니요, 괜찮아요.","不用，沒關係。","봉투 필요하세요?","需要袋子嗎？"],
+  ["네, 주세요.","好，請給我。","영수증 드릴까요?","需要收據嗎？"],
+  ["아니요, 없어요.","沒有（會員）。","포인트 적립하세요?","要集點嗎？"],
+  ["네, 알겠어요.","好，我知道了。","진동벨 울리면 가지러 오세요.","震動鈴響了請來取餐。"],
+  ["카드 여기 있어요.","卡在這裡。","카드 꽂아 주세요.","請把卡片插進去。"]]},
+ {t:"冬天住宿",p:[
+  ["난방이 안 돼요.","暖氣不能用。","보일러 켜 드릴게요.","我幫您把暖氣打開。"],
+  ["뜨거운 물이 안 나와요.","沒有熱水。","잠시만 기다려 주세요.","請稍等一下。"]]}
 ];
 const READING = [
  {t:"營業時間",k:"영업시간은 오전 10시부터 오후 8시까지입니다. 매주 월요일은 쉽니다.",
@@ -767,14 +817,21 @@ const READING = [
  {t:"餐廳叫號",k:"대기 번호 27번 손님, 입장해 주세요.",z:"候位27號客人，請入場。",q:"現在叫到幾號？",a:"27號"}
 ];
 
+/* ============ 告示與點餐機 ============ */
+const SIGN = [
+ ["매장","內用（點餐機選項）"],["포장","外帶"],["주문하기","點餐"],["결제하기","付款"],
+ ["카드 결제","刷卡付款"],["현금","現金"],["품절","售完"],["영업중","營業中"],
+ ["준비중","準備中（還沒開店）"],["브레이크 타임","午休時段（暫停營業）"],["미세요","推"],["당기세요","拉"],
+ ["입구","入口"],["출구","出口"],["남자 화장실","男廁"],["여자 화장실","女廁"],
+ ["번호표","號碼牌"],["진동벨","震動取餐鈴"],["셀프","自助（水、小菜自己拿）"],["금연","禁菸"]];
 
 /* ============ 建卡 ============ */
 const DECKS=[];
 function push(o){DECKS.push(o);}
 VOWEL.forEach((v,i)=>push({id:"v"+i,deck:"jamo",front:v[0],back:v[2],sub:v[1],extra:"기본 모음・"+v[3],kr:v[1]}));
 VOWEL2.forEach((v,i)=>push({id:"v2"+i,deck:"jamo",front:v[0],back:v[2],sub:v[1],extra:"복합 모음・"+v[3],kr:v[1]}));
-CONS.forEach((c,i)=>push({id:"c"+i,deck:"jamo",front:c[0],back:c[2],sub:c[1],extra:"기본 자음・"+c[3],kr:c[1]}));
-CONS2.forEach((c,i)=>push({id:"c2"+i,deck:"jamo",front:c[0],back:c[2],sub:c[1],extra:"쌍자음・"+c[3],kr:c[1]}));
+CONS.forEach((c,i)=>push({id:"c"+i,deck:"jamo",front:c[0],back:c[2],sub:comp(c[0],"ㅏ",""),extra:"기본 자음・"+c[3]+"・名稱 "+c[1],kr:comp(c[0],"ㅏ","")}));
+CONS2.forEach((c,i)=>push({id:"c2"+i,deck:"jamo",front:c[0],back:c[2],sub:comp(c[0],"ㅏ",""),extra:"쌍자음・"+c[3]+"・名稱 "+c[1],kr:comp(c[0],"ㅏ","")}));
 SYLLABLE.forEach((x,i)=>push({id:"sy"+i,deck:"syllable",front:x[0],back:x[1],sub:"",extra:x[2],kr:x[0]}));
 CONTRAST.forEach((x,i)=>push({id:"ct"+i,deck:"contrast",front:x[0],back:x[1],sub:"",extra:x[2],kr:x[0].split("·").join(" ")}));
 BATCHIM.forEach((b,i)=>push({id:"b"+i,deck:"batchim",front:b[0]+" 받침",back:b[2],sub:b[1],extra:b[3],kr:""}));
@@ -784,8 +841,11 @@ let dn=0;
 DRAMA.forEach(sec=>sec.p.forEach(p=>push({id:"d"+(dn++),deck:"drama",front:p[1],back:p[0],
   sub:p[2]||"",extra:sec.t,kr:p[0]})));
 let tn=0;
-TRAVEL.forEach(sec=>sec.p.forEach(p=>push({id:"t"+(tn++),deck:"travel",front:p[1],back:p[0],
-  sub:"",extra:sec.t,kr:p[0]})));
+TRAVEL.forEach(sec=>sec.p.forEach(p=>{
+  const id=p[2]||("t"+tn);
+  if(!p[2]||p[3]==="swap")tn++;   /* swap＝取代舊句：換新 id 但保留流水號 */
+  push({id,deck:"travel",front:p[1],back:p[0],sub:"",extra:sec.t,kr:p[0]});
+}));
 SINO.forEach((x,i)=>push({id:"ns"+i,deck:"number",front:x[1],back:x[0],sub:"",extra:"한자어 숫자",kr:x[0]}));
 NATIVE.forEach((x,i)=>push({id:"nn"+i,deck:"number",front:x[1]+"（數東西用）",back:x[0],sub:"",extra:"고유어 숫자",kr:x[0]}));
 let cn=0;
@@ -796,13 +856,15 @@ BUSAN.forEach(sec=>sec.p.forEach(x=>push({id:"bs"+(bn++),deck:"busan",front:x[1]
   sub:"",extra:sec.t,kr:x[0]})));
 let qn=0;
 DIALOGUE.forEach(sec=>sec.p.forEach(x=>{
-  push({id:"dq"+(qn++),deck:"dialogue",front:x[1],back:x[0],sub:x[2]+"｜"+x[3],extra:sec.t,kr:x[0]});
-  push({id:"dr"+(qn++),deck:"response",front:x[2],back:x[3],sub:x[0],extra:sec.t,kr:x[2],audio:1});
+  const rev=sec.first==="them"?1:0;   /* 店員先開口的情境 */
+  push({id:"dq"+(qn++),deck:"dialogue",front:rev?"店員："+x[3]+"\n你想說："+x[1]:x[1],back:x[0],sub:x[2]+"｜"+x[3],extra:sec.t,kr:x[0],rev});
+  push({id:"dr"+(qn++),deck:"response",front:x[2],back:x[3],sub:x[0],extra:sec.t,kr:x[2],audio:1,rev});
 }));
 READING.forEach((x,i)=>push({id:"rd"+i,deck:"reading",front:x.k+"\n\n"+x.q,back:x.a,sub:x.z,extra:x.t,kr:x.k}));
+SIGN.forEach((x,i)=>push({id:"sg"+i,deck:"sign",front:x[0],back:x[1],sub:"",extra:"告示・點餐機",kr:x[0]}));
 /* 所有來源卡建完後才建立聽力卡，避免旅遊句被漏掉 */
 DECKS.filter(c=>(c.deck==="drama"||c.deck==="word"||c.deck==="travel")&&c.kr).slice().forEach(b=>{
-  push({id:"L"+b.id,deck:"listen",front:"",back:b.deck==="drama"?b.front:b.back,sub:b.kr,
+  push({id:"L"+b.id,deck:"listen",front:"",back:b.deck==="word"?b.back:b.front,sub:b.kr,
         extra:"듣기・"+({drama:"대사",word:"단어",travel:"여행"}[b.deck]),kr:b.kr,audio:1});
 });
 const BY={};DECKS.forEach(c=>{(BY[c.deck]=BY[c.deck]||[]).push(c);});
@@ -813,7 +875,7 @@ const LOCAL=(()=>{try{localStorage.setItem("__p","1");localStorage.removeItem("_
   return{get:k=>localStorage.getItem(k),set:(k,v)=>localStorage.setItem(k,v)};}catch(e){return null;}})();
 const KEY="kr:v1";
 let backend="",lastErr="",savedAt="",loadedFrom="";
-let S={cards:{},day:{d:"",newN:0,revN:0},streak:0,last:"",total:0,newPerDay:12,rate:0.75,
+let S={cards:{},day:{d:"",newN:0,revN:0},streak:0,last:"",total:0,newPerDay:16,rate:0.75,
   off:{listen:1},roma:true,trip:"",exportedAt:"",mtime:0,onboarded:false};
 const today=()=>new Date().toLocaleDateString("sv");
 const dnum=s=>Math.floor(new Date(s+"T00:00:00").getTime()/864e5);
@@ -835,6 +897,7 @@ async function load(){
   if(raw){try{S=Object.assign(S,JSON.parse(raw));loadedFrom=KEY;}catch(e){lastErr="資料損毀";}}
   else loadedFrom="第一次使用";
   if(!S.off)S.off={listen:1};
+  if(!S.mig16){if(S.newPerDay===12)S.newPerDay=16;S.mig16=1;}
   if(typeof S.roma!=="boolean")S.roma=true;
   const t=today();
   if(S.day.d!==t){
@@ -966,23 +1029,23 @@ const app=document.getElementById("app"),navEl=document.getElementById("nav");
 const TABS=[["today","今","今日"],["hangul","한","韓文字"],["pron","音","發音"],
   ["word","단","單字"],["gram","문","文法"],["talk","화","會話"]];
 let tab="today",wMode="word",tMode="travel",session=null,shown=false,pick=null,curOpts=null,undoSnap=null,played=0,taught=false,setOpen=false,helpOpen=false,ioMode="";
-const MODS=[["jamo","字母"],["syllable","拼讀"],["contrast","音辨"],["batchim","收尾音"],["word","單字"],["number","數字量詞"],["gram","文法"],["travel","旅遊會話"],["dialogue","雙向對話"],["response","回話聽力"],["reading","短文讀解"],["drama","戲劇台詞"],["busan","釜山"],["listen","聽力"]];
-const DLABEL={jamo:"字母",syllable:"音節拼讀",contrast:"相似音辨識",batchim:"收尾音",word:"單字",number:"數字量詞",gram:"文法",travel:"旅遊會話",dialogue:"雙向對話",response:"回話聽力",reading:"短文讀解",drama:"戲劇台詞",busan:"釜山",listen:"聽力"};
+const MODS=[["jamo","字母"],["syllable","拼讀"],["contrast","音辨"],["batchim","收尾音"],["word","單字"],["number","數字量詞"],["gram","文法"],["travel","旅遊會話"],["dialogue","雙向對話"],["response","回話聽力"],["reading","短文讀解"],["drama","戲劇台詞"],["busan","釜山"],["sign","告示"],["listen","聽力"]];
+const DLABEL={jamo:"字母",syllable:"音節拼讀",contrast:"相似音辨識",batchim:"收尾音",word:"單字",number:"數字量詞",gram:"文法",travel:"旅遊會話",dialogue:"雙向對話",response:"回話聽力",reading:"短文讀解",drama:"戲劇台詞",busan:"釜山",sign:"告示點餐機",listen:"聽力"};
 const PROMPT={jamo:"這個字母怎麼念？",syllable:"請逐字拼讀，再連起來念",contrast:"請依序念出並比較聲音",batchim:"這個收尾音怎麼念？",
   word:"這個韓文是什麼意思？",number:"請用韓文說出這個數字或數量",gram:"先讀中文規則，再選正確答案",
   travel:"這句中文用韓文怎麼說？",dialogue:"遇到這個情境，你會怎麼說？",response:"只聽聲音，對方說了什麼？",
-  reading:"閱讀韓文短文後回答問題",drama:"這句中文用韓文怎麼說？",busan:"這個釜山詞語怎麼念？",listen:"只聽聲音，猜出意思"};
+  reading:"閱讀韓文短文後回答問題",drama:"這句中文用韓文怎麼說？",busan:"這個釜山詞語怎麼念？",sign:"這個告示或按鈕是什麼意思？",listen:"只聽聲音，猜出意思"};
 const COURSE=[
   {n:"韓文字入門",d:"40個字母、音節組合與基本拼讀",k:["jamo","syllable"]},
   {n:"發音基礎",d:"相似音、七種收尾音與常見音變",k:["contrast","batchim"]},
   {n:"A1句子骨架",d:"高頻單字、數字量詞與基本語尾",k:["word","number","gram"]},
-  {n:"旅行溝通",d:"主動開口、聽懂回話與釜山情境",k:["travel","dialogue","response","busan"]},
+  {n:"旅行溝通",d:"主動開口、聽懂店員、看懂告示與釜山情境",k:["travel","dialogue","response","busan","sign"]},
   {n:"整合理解",d:"無文字聽力、短文閱讀與韓劇台詞",k:["listen","reading","drama"]}
 ];
 function courseCards(keys){let out=[];keys.forEach(k=>{out=out.concat(BY[k]||[]);});return out;}
 function learnRank(c){
   if(c.deck==="jamo")return /^v2/.test(c.id)?2:(/^c2/.test(c.id)?3:(/^v\d/.test(c.id)?0:1));
-  const order=["syllable","contrast","batchim","word","number","gram","travel","dialogue","response","busan","reading","drama","listen"];
+  const order=["syllable","contrast","batchim","word","number","gram","travel","dialogue","response","busan","sign","reading","drama","listen"];
   const n=order.indexOf(c.deck);return n<0?99:n+4;
 }
 
@@ -1146,13 +1209,14 @@ function vToday(){
 /* --- 韓文字 --- */
 function jamoTable(list,cols,pre){
   return `<div class="kt" style="grid-template-columns:repeat(${cols},1fr)">`+list.map((k,i)=>
-   `<div data-say="${k[1]}"><b class="kr">${k[0]}</b><s class="kr">${k[1]}</s><em>${k[2]}</em></div>`).join("")+`</div>`;
+   {const sy=/[ㅏ-ㅣ]/.test(k[0])?k[1]:comp(k[0],"ㅏ","");
+   return `<div data-say="${sy}"><b class="kr">${k[0]}</b><s class="kr">${sy}</s><em>${k[2]}</em></div>`;}).join("")+`</div>`;
 }
 function vHangul(){
   const d=BY.jamo.filter(c=>mastery(c.id)===2).length;
   return `<div class="wrap"><h1>한글 <span class="zh">韓文字母</span></h1>
   <p class="sub">這一頁教你韓文字怎麼組成。先學基本母音10個，再學基本子音14個；複合母音與雙子音放到後面。</p>
-  <div class="learnNote"><b>零基礎重點：</b>先記住字形和聲音，不需要背「기역、니은」等韓文名稱。點每一格可以聽發音。已掌握 ${d}/${BY.jamo.length}</div>
+  <div class="learnNote"><b>零基礎重點：</b>先記住字形和聲音，不需要背「기역、니은」等韓文名稱。點每一格可以聽發音，子音用「子音＋ㅏ」示範，例如 ㄱ→가。已掌握 ${d}/${BY.jamo.length}</div>
   <button class="cta" data-start="jamo">練習字母</button>
   <h2>字是怎麼組起來的</h2>
   <div class="gcard">
@@ -1291,20 +1355,28 @@ function vGram(){
 /* --- 台詞 --- */
 function vTalk(){
   return `<div class="wrap" style="padding-bottom:0"><h1>회화 <span class="zh">生活與旅行會話</span></h1>
-  ${subbar("tm",[["travel","旅遊"],["dialogue","回話"],["reading","讀解"],["drama","戲劇"],["busan","釜山"]],tMode)}</div>`
-  + ({travel:vTravel,dialogue:vDialogue,reading:vReading,drama:vDrama,busan:vBusan}[tMode])();
+  ${subbar("tm",[["travel","旅遊"],["dialogue","回話"],["sign","告示"],["reading","讀解"],["drama","戲劇"],["busan","釜山"]],tMode)}</div>`
+  + ({travel:vTravel,dialogue:vDialogue,sign:vSign,reading:vReading,drama:vDrama,busan:vBusan}[tMode])();
 }
 function vDialogue(){
   const a=(BY.dialogue||[]).concat(BY.response||[]),d=a.filter(c=>mastery(c.id)===2).length;
-  return `<div class="wrap" style="padding-top:8px"><p class="sub">不只背自己要說的句子，也練習對方最可能怎麼回答。已掌握 ${d}/${a.length}</p>
+  return `<div class="wrap" style="padding-top:8px"><p class="sub">不只背自己要說的句子，也練習對方最可能怎麼回答。「店員先問你」這組反過來，練習聽懂店員的問題。已掌握 ${d}/${a.length}</p>
   <button class="cta" data-start="dialogue">練習主動開口</button>
   <button class="cta2" data-type="dialogue">韓文鍵盤輸入挑戰</button>
   <button class="cta2" data-start="response">只聽對方回話</button>
-  ${DIALOGUE.map(sec=>`<h2>${sec.t}</h2>${sec.p.map(x=>`<div class="dialog">
-    <div class="bubble you"><span class="kr">${x[0]}</span><div class="d">你：${x[1]}</div></div>
-    <div class="bubble them"><span class="kr">${x[2]}</span><div class="d">對方：${x[3]}</div></div>
+  ${DIALOGUE.map(sec=>`<h2>${sec.t}</h2>${sec.p.map(x=>{
+    const you=`<div class="bubble you"><span class="kr">${x[0]}</span><div class="d">你：${x[1]}</div></div>`,
+          them=`<div class="bubble them"><span class="kr">${x[2]}</span><div class="d">${sec.first==="them"?"店員":"對方"}：${x[3]}</div></div>`;
+    return `<div class="dialog">${sec.first==="them"?them+you:you+them}
     <div style="display:flex;gap:7px;margin-top:8px"><button class="spk" data-say="${x[0]}" style="margin:0">▸ 聽自己說</button>
-    <button class="spk" data-say="${x[2]}" style="margin:0">▸ 聽對方說</button></div></div>`).join("")}`).join("")}</div>`;
+    <button class="spk" data-say="${x[2]}" style="margin:0">▸ 聽對方說</button></div></div>`;}).join("")}`).join("")}</div>`;
+}
+function vSign(){
+  const d=(BY.sign||[]).filter(c=>mastery(c.id)===2).length;
+  return `<div class="wrap" style="padding-top:8px">
+  <p class="sub">${BY.sign.length} 個店家告示和點餐機按鈕。韓國很多小吃店、咖啡廳用點餐機（키오스크），看得懂就不必開口。已掌握 ${d}</p>
+  <button class="cta" data-start="sign">練習告示</button>
+  ${SIGN.map((x,i)=>krRow(x[0],x[1],"",mastery("sg"+i))).join("")}</div>`;
 }
 function vReading(){
   const d=(BY.reading||[]).filter(c=>mastery(c.id)===2).length;
@@ -1380,7 +1452,7 @@ const TIP={jamo:"先唸出這個字母的音",batchim:"先想這個收尾音怎�
   syllable:"先逐字拼，再連起來讀",contrast:"依序讀出三組聲音並比較送氣",number:"先想這個數字怎麼唸",
   gram:"想出正確的助詞或語尾",travel:"出聲把整句韓文講出來",dialogue:"先自己說，再預測對方回話",
   response:"只聽回答，判斷對方在說什麼",reading:"先讀全文，再回答問題",
-  drama:"出聲把整句韓文講出來",busan:"先唸唸看",listen:"先聽，再想是什麼意思"};
+  drama:"出聲把整句韓文講出來",busan:"先唸唸看",sign:"先唸出來，再想意思",listen:"先聽，再想是什麼意思"};
 function startBeginner(){
   const ids=new Set(VOWEL.map((_,i)=>"v"+i).concat(CONS.map((_,i)=>"c"+i)));
   let q=DECKS.filter(c=>ids.has(c.id)&&(isDue(c.id)||!seen(c.id)));
@@ -1428,7 +1500,7 @@ function answerBlock(c,isNew,pick){
       ${c.sub?`<div class="hint kr" style="font-size:17px">${esc(c.sub)}</div>`:""}
       <div class="hint">${esc(c.extra)}</div>${audio}${wrong}`;
 
-  if(c.deck==="word")   /* 正面是韓文，背面給意思＋實際發音 */
+  if(c.deck==="word"||c.deck==="sign")   /* 正面是韓文，背面給意思＋實際發音 */
     return `<div class="mid" style="font-size:26px">${esc(c.back)}</div>
       ${soundNote}${rm}<div class="hint">${esc(c.extra)}</div>${audio}${wrong}`;
 
@@ -1446,13 +1518,13 @@ function answerBlock(c,isNew,pick){
 
   if(c.deck==="dialogue")
     return `<div class="mid kr" style="font-size:25px">${esc(c.back)}</div>
-      ${soundNote}${rm}<div class="hint">對方可能回答：<span class="kr">${esc(c.sub.split("｜")[0])}</span><br>${esc(c.sub.split("｜")[1]||"")}</div>
+      ${soundNote}${rm}<div class="hint">${c.rev?"店員剛才問":"對方可能回答"}：<span class="kr">${esc(c.sub.split("｜")[0])}</span><br>${esc(c.sub.split("｜")[1]||"")}</div>
       <div class="hint">${esc(c.extra)}</div>${audio}${wrong}`;
 
   if(c.deck==="response")
     return `<div class="mid kr" style="font-size:23px">${esc(c.kr)}</div>${soundNote}${rm}
       <div class="mid" style="font-size:18px;margin-top:6px">${esc(c.back)}</div>
-      <div class="hint">它是在回答：<span class="kr">${esc(c.sub)}</span></div>${audio}${wrong}`;
+      <div class="hint">${c.rev?"你可以回答":"它是在回答"}：<span class="kr">${esc(c.sub)}</span></div>${audio}${wrong}`;
 
   if(c.deck==="reading")
     return `<div class="mid" style="font-size:23px">${esc(c.back)}</div>
@@ -1494,7 +1566,7 @@ function drawStudy(){
     :(c.audio&&!shown
       ? `<button class="spk" data-say="${esc(c.kr)}" style="font-size:26px;padding:26px 40px;border-radius:99px">▶</button>
          <button class="spk" data-slow="${esc(c.kr)}" style="margin-top:12px">▶ 放慢再聽</button>`
-      : `<div class="${big?"big kr":((c.deck==="gram"||c.deck==="reading")?"small kr":"mid")}" style="white-space:pre-line">${esc(c.front)}</div>`)}
+      : `<div class="${big?"big kr":((c.deck==="gram"||c.deck==="reading"||(c.rev&&c.deck==="dialogue"))?"small kr":"mid")}" style="white-space:pre-line">${esc(c.front)}</div>`)}
     ${shown?`<div class="ans">${answerBlock(c,isNew,pick)}    </div>`:""}
   </div>
   <div class="tip">${tip}</div>
