@@ -1094,13 +1094,15 @@ function learnRank(c){
 
 function drawNav(){
   navEl.innerHTML=TABS.map(t=>`<button data-t="${t[0]}" class="${tab===t[0]&&!session?"on":""}"><b class="kr">${t[1]}</b>${t[2]}</button>`).join("");
-  navEl.querySelectorAll("button").forEach(b=>b.onclick=()=>{session=null;tab=b.dataset.t;render();});
+  navEl.querySelectorAll("button").forEach(b=>b.onclick=()=>{session=null;tab=b.dataset.t;render(true);});
 }
-function render(){
+/* render(true)＝換頁、開始或結束練習時回到頂端；其他情況（展開設定、切換選項、背景同步）保留捲動位置 */
+function render(top){
   rollDay();
-  if(session)return drawStudy();
+  if(session){drawStudy();if(top)window.scrollTo(0,0);return;}
+  const y=window.scrollY||0;
   app.innerHTML=({today:vToday,hangul:vHangul,pron:vPron,word:vWord,gram:vGram,talk:vTalk}[tab])();
-  bind();drawNav();window.scrollTo(0,0);
+  bind();drawNav();window.scrollTo(0,top?0:y);
 }
 function bind(){
   app.querySelectorAll("[data-say]").forEach(e=>e.onclick=ev=>{ev.stopPropagation();say(e.dataset.say);});
@@ -1118,8 +1120,8 @@ function bind(){
   app.querySelectorAll("[data-roma]").forEach(e=>e.onclick=()=>{S.roma=!S.roma;save();render();});
   app.querySelectorAll("[data-off]").forEach(e=>e.onclick=()=>{const k=e.dataset.off;
     if(S.off[k])delete S.off[k];else S.off[k]=1;save();render();});
-  app.querySelectorAll("[data-wm]").forEach(e=>e.onclick=()=>{wMode=e.dataset.wm;render();});
-  app.querySelectorAll("[data-tm]").forEach(e=>e.onclick=()=>{tMode=e.dataset.tm;render();});
+  app.querySelectorAll("[data-wm]").forEach(e=>e.onclick=()=>{wMode=e.dataset.wm;render(true);});
+  app.querySelectorAll("[data-tm]").forEach(e=>e.onclick=()=>{tMode=e.dataset.tm;render(true);});
   app.querySelectorAll("[data-trip]").forEach(e=>e.onchange=()=>{S.trip=e.value;save();render();});
   app.querySelectorAll("[data-setopen]").forEach(e=>e.onclick=()=>{setOpen=!setOpen;render();});
   app.querySelectorAll("[data-sync]").forEach(e=>e.onclick=()=>{
@@ -1525,7 +1527,7 @@ function openSession(pool,max,opt){
     toast(emptyMsg()+"。以下是學過的卡，額外練習不影響排程");
   }
   session=Object.assign({q:shuf(q),i:0,n:q.length,practice},opt||{});
-  shown=false;pick=null;curOpts=null;undoSnap=null;played=0;taught=false;render();
+  shown=false;pick=null;curOpts=null;undoSnap=null;played=0;taught=false;render(true);
 }
 function startBeginner(){
   const ids=new Set(VOWEL.map((_,i)=>"v"+i).concat(CONS.map((_,i)=>"c"+i)));
@@ -1536,7 +1538,7 @@ function startTyping(kind){openSession(BY[kind]||[],20,{typed:true});}
 function startSession(kind){
   if(kind!=="all")return openSession(BY[kind]||[],25);
   const q=buildQueue();if(!q.length){toast("今天的排程都做完了");return;}
-  session={q,i:0,n:q.length};shown=false;pick=null;curOpts=null;undoSnap=null;played=0;taught=false;render();
+  session={q,i:0,n:q.length};shown=false;pick=null;curOpts=null;undoSnap=null;played=0;taught=false;render(true);
 }
 function answerBlock(c,isNew,pick){
   const norm=x=>String(x||"").toLowerCase().replace(/[\s.,!?。！？、'’]/g,"");
@@ -1600,7 +1602,7 @@ function drawStudy(){
     app.innerHTML=`<div class="study"><div class="face"><div class="mid">끝!</div>
     <div class="hint">完成 ${session.n} 張 · 今日累計 ${S.day.newN+S.day.revN+S.day.lrnN} 張${session.practice?"<br>額外練習，沒有改變複習排程":""}</div></div>
     <button class="cta" id="bk">回到今日</button></div>`;
-    document.getElementById("bk").onclick=()=>{session=null;syncNow();render();};return;
+    document.getElementById("bk").onclick=()=>{session=null;syncNow();render(true);};return;
   }
   const c=session.q[session.i],isNew=!seen(c.id);
   const teachNow=isNew&&c.gram&&!taught;
@@ -1673,7 +1675,7 @@ function drawStudy(){
     if(u.again&&session.q[session.q.length-1]&&session.q[session.q.length-1].id===u.id)session.q.pop();
     session.i=u.i;shown=true;pick=u.pick;curOpts=u.opts;played=1;taught=true;
     undoSnap=null;save();drawStudy();};
-  document.getElementById("quit").onclick=()=>{session=null;syncNow();render();};
+  document.getElementById("quit").onclick=()=>{session=null;syncNow();render(true);};
 }
 
 loadSync();
