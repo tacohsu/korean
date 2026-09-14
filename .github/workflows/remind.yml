@@ -1,19 +1,17 @@
 name: 韓文學習提醒
-
+ 
 on:
   schedule:
     # cron 一律使用 UTC。13:00 UTC = 台灣晚上 9 點
     - cron: "0 13 * * *"
   workflow_dispatch:        # 也可以到 Actions 頁面手動執行，方便測試
-
+ 
 jobs:
   remind:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
+      - uses: actions/checkout@v6
+      # 不用 setup-node：runner 本身就內建 Node，腳本只用到 fetch，版本夠用就好
       - run: node remind.mjs
         env:
           SUPABASE_URL:      ${{ secrets.SUPABASE_URL }}
@@ -23,3 +21,4 @@ jobs:
           LINE_USER_ID:      ${{ secrets.LINE_USER_ID }}
           APP_URL:           ${{ vars.APP_URL }}
           TRIP_DATE:         "2026-11-07"
+ 
