@@ -2,10 +2,9 @@ name: 韓文學習提醒
  
 on:
   schedule:
-    # timezone 要和 cron 放在同一個項目底下，不是 on: 的同層
-    - cron: "30 20 * * *"
-      timezone: "Asia/Taipei"
-  workflow_dispatch:        # 也可以到 Actions 頁面手動執行，方便測試
+    # UTC 12:30＝台灣時間 20:30
+    - cron: "30 12 * * *"
+  workflow_dispatch:
  
 jobs:
   remind:
