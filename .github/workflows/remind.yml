@@ -1,24 +1,43 @@
 name: 韓文學習提醒
- 
+
 on:
-  schedule:
-    # UTC 12:30＝台灣時間 20:30
-    - cron: "30 12 * * *"
+  # 每日排程改由 Supabase Cron 觸發
   workflow_dispatch:
- 
+    inputs:
+      source:
+        description: 呼叫來源
+        required: false
+        default: manual
+        type: choice
+        options:
+          - manual
+          - supabase
+
+permissions:
+  contents: read
+
 jobs:
   remind:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+
     steps:
-      - uses: actions/checkout@v6
-      # 不用 setup-node：runner 本身就內建 Node，腳本只用到 fetch，版本夠用就好
-      - run: node remind.mjs
+      - name: 取得韓文學習程式
+        uses: actions/checkout@v6
+
+      # Runner 已內建 Node.js，腳本只使用內建 fetch
+      - name: 讀取進度並傳送 LINE 提醒
+        run: node remind.mjs
         env:
-          SUPABASE_URL:      ${{ secrets.SUPABASE_URL }}
+          TZ: Asia/Taipei
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-          SYNC_CODE:         ${{ secrets.SYNC_CODE }}
-          LINE_TOKEN:        ${{ secrets.LINE_TOKEN }}
-          LINE_USER_ID:      ${{ secrets.LINE_USER_ID }}
-          APP_URL:           ${{ vars.APP_URL }}
-          TRIP_DATE:         "2026-11-07"
- 
+          SYNC_CODE: ${{ secrets.SYNC_CODE }}
+          LINE_TOKEN: ${{ secrets.LINE_TOKEN }}
+          LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
+          APP_URL: ${{ vars.APP_URL }}
+          TRIP_DATE: "2026-11-07"
+
+          # Supabase 觸發時遵守「完成後不推播」；
+          # GitHub 手動執行時強制發送，方便測試。
+          FORCE_SEND: ${{ inputs.source != 'supabase' }}
